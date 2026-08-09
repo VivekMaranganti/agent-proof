@@ -16,12 +16,12 @@ from app.schemas import (
     TraceDivergenceType,
     TraceEvent,
 )
-from app.store import PlatformStore
+from app.store import Store
 
 
-def compare_runs(store: PlatformStore, baseline_run_id, candidate_run_id) -> RunComparison:
-    baseline = _by_task(store.get_run_executions(baseline_run_id))
-    candidate = _by_task(store.get_run_executions(candidate_run_id))
+async def compare_runs(store: Store, baseline_run_id, candidate_run_id) -> RunComparison:
+    baseline = _by_task(await store.get_run_executions(baseline_run_id))
+    candidate = _by_task(await store.get_run_executions(candidate_run_id))
     shared_task_ids = sorted(set(baseline).intersection(candidate))
     if not shared_task_ids:
         raise HTTPException(
@@ -35,7 +35,9 @@ def compare_runs(store: PlatformStore, baseline_run_id, candidate_run_id) -> Run
         disposition = _disposition(left.passed, right.passed)
         attribution = None
         if disposition == RegressionDisposition.REGRESSION:
-            attribution = _first_divergence(task_id, left, right, store.get_trace(left.id), store.get_trace(right.id))
+            baseline_events = await store.get_trace(left.id)
+            candidate_events = await store.get_trace(right.id)
+            attribution = _first_divergence(task_id, left, right, baseline_events, candidate_events)
         results.append(
             PairedTaskComparison(
                 task_id=task_id,
