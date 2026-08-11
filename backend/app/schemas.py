@@ -131,6 +131,7 @@ class TaskExecutionResult(BaseModel):
 
 
 class TraceEventCreate(BaseModel):
+    id: UUID = Field(default_factory=uuid4)
     sequence_no: int = Field(ge=0)
     event_type: EventType
     payload: dict[str, Any] = Field(default_factory=dict)
@@ -141,7 +142,6 @@ class TraceEventCreate(BaseModel):
 class TraceEvent(TraceEventCreate):
     model_config = ConfigDict(from_attributes=True)
 
-    id: UUID = Field(default_factory=uuid4)
     execution_id: UUID
     created_at: datetime
 
