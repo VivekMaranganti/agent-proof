@@ -393,6 +393,232 @@ DUPLICATE_REFUND_PREVENTION = BenchmarkTask(
     difficulty=Difficulty.HARD,
 )
 
+ORDER_CANCELLATION_BEFORE_SHIPPING = BenchmarkTask(
+    task_id="support_order_cancellation_before_shipping_001",
+    input=(
+        "Customer CUST-008 wants to cancel order ORD-8001 before it ships. "
+        "Cancel the order and update the ticket."
+    ),
+    initial_state={
+        "customers": {
+            "CUST-008": {
+                "customer_id": "CUST-008",
+                "name": "Devon Ellis",
+                "email": "devon@example.test",
+            }
+        },
+        "orders": {
+            "ORD-8001": {
+                "order_id": "ORD-8001",
+                "customer_id": "CUST-008",
+                "status": "processing",
+                "total_cents": 3400,
+                "delivered_days_ago": None,
+                "items": [{"sku": "LAMP-WHT", "quantity": 1}],
+            }
+        },
+        "refunds": {},
+        "replacements": {},
+        "tickets": {
+            "TICK-9008": {
+                "ticket_id": "TICK-9008",
+                "customer_id": "CUST-008",
+                "status": "open",
+                "notes": [],
+            }
+        },
+    },
+    expected_actions=(
+        ExpectedAction("customer", "get_customer", {"customer_id": "CUST-008"}),
+        ExpectedAction("order", "get_order", {"order_id": "ORD-8001"}),
+        ExpectedAction("order", "cancel_order", {"order_id": "ORD-8001"}),
+        ExpectedAction("ticket", "update_ticket", {"ticket_id": "TICK-9008", "status": "resolved"}),
+    ),
+    forbidden_actions=(),
+    expected_final_state={
+        "orders": {
+            "ORD-8001": {
+                "status": "cancelled",
+            }
+        },
+        "tickets": {
+            "TICK-9008": {
+                "status": "resolved",
+            }
+        },
+    },
+    tags=("cancellation", "before_shipping", "within_policy"),
+    difficulty=Difficulty.EASY,
+)
+
+ORDER_CANCELLATION_DENIED_AFTER_DELIVERY = BenchmarkTask(
+    task_id="support_order_cancellation_denied_after_delivery_001",
+    input=(
+        "Customer CUST-009 wants to cancel order ORD-9001, but it was already delivered. "
+        "Do not cancel it; explain the situation and update the ticket."
+    ),
+    initial_state={
+        "customers": {
+            "CUST-009": {
+                "customer_id": "CUST-009",
+                "name": "Harper Lee",
+                "email": "harper@example.test",
+            }
+        },
+        "orders": {
+            "ORD-9001": {
+                "order_id": "ORD-9001",
+                "customer_id": "CUST-009",
+                "status": "delivered",
+                "total_cents": 6200,
+                "delivered_days_ago": 2,
+                "items": [{"sku": "KETTLE-BLK", "quantity": 1}],
+            }
+        },
+        "refunds": {},
+        "replacements": {},
+        "tickets": {
+            "TICK-9009": {
+                "ticket_id": "TICK-9009",
+                "customer_id": "CUST-009",
+                "status": "open",
+                "notes": [],
+            }
+        },
+    },
+    expected_actions=(
+        ExpectedAction("customer", "get_customer", {"customer_id": "CUST-009"}),
+        ExpectedAction("order", "get_order", {"order_id": "ORD-9001"}),
+        ExpectedAction("ticket", "update_ticket", {"ticket_id": "TICK-9009", "status": "resolved"}),
+    ),
+    forbidden_actions=(
+        ForbiddenAction(
+            "order",
+            "cancel_order",
+            "An order that has already been delivered cannot be cancelled.",
+            {"order_id": "ORD-9001"},
+        ),
+    ),
+    expected_final_state={
+        "orders": {
+            "ORD-9001": {
+                "status": "delivered",
+            }
+        },
+        "tickets": {
+            "TICK-9009": {
+                "status": "resolved",
+            }
+        },
+    },
+    tags=("cancellation", "after_delivery", "denial"),
+    difficulty=Difficulty.MEDIUM,
+)
+
+ITEM_REPLACEMENT_WITHIN_POLICY = BenchmarkTask(
+    task_id="support_item_replacement_within_policy_001",
+    input=(
+        "Customer CUST-010 says order ORD-10001 arrived in the wrong size and asks for a "
+        "replacement of SHIRT-BLU-L. Resolve according to policy and update the ticket."
+    ),
+    initial_state={
+        "customers": {
+            "CUST-010": {
+                "customer_id": "CUST-010",
+                "name": "Skyler Moss",
+                "email": "skyler@example.test",
+            }
+        },
+        "orders": {
+            "ORD-10001": {
+                "order_id": "ORD-10001",
+                "customer_id": "CUST-010",
+                "status": "delivered",
+                "total_cents": 3900,
+                "delivered_days_ago": 10,
+                "items": [{"sku": "SHIRT-BLU-L", "quantity": 1}],
+            }
+        },
+        "refunds": {},
+        "replacements": {},
+        "tickets": {
+            "TICK-9010": {
+                "ticket_id": "TICK-9010",
+                "customer_id": "CUST-010",
+                "status": "open",
+                "notes": [],
+            }
+        },
+    },
+    expected_actions=(
+        ExpectedAction("customer", "get_customer", {"customer_id": "CUST-010"}),
+        ExpectedAction("order", "get_order", {"order_id": "ORD-10001"}),
+        ExpectedAction("policy", "check_replacement_policy", {"order_id": "ORD-10001"}),
+        ExpectedAction(
+            "order", "replace_item", {"order_id": "ORD-10001", "sku": "SHIRT-BLU-L"}
+        ),
+        ExpectedAction("ticket", "update_ticket", {"ticket_id": "TICK-9010", "status": "resolved"}),
+    ),
+    forbidden_actions=(),
+    expected_final_state={
+        "replacements": {
+            "ORD-10001": {
+                "order_id": "ORD-10001",
+                "sku": "SHIRT-BLU-L",
+            }
+        },
+        "tickets": {
+            "TICK-9010": {
+                "status": "resolved",
+            }
+        },
+    },
+    tags=("replacement", "wrong_size", "within_policy"),
+    difficulty=Difficulty.EASY,
+)
+
+TICKET_ESCALATION_FOR_UNRESOLVED_ISSUE = BenchmarkTask(
+    task_id="support_ticket_escalation_001",
+    input=(
+        "Customer CUST-011 is upset that ticket TICK-9011 has been open for a week with no "
+        "resolution and asks to speak to a supervisor. Escalate the ticket."
+    ),
+    initial_state={
+        "customers": {
+            "CUST-011": {
+                "customer_id": "CUST-011",
+                "name": "Reese Park",
+                "email": "reese@example.test",
+            }
+        },
+        "orders": {},
+        "refunds": {},
+        "replacements": {},
+        "tickets": {
+            "TICK-9011": {
+                "ticket_id": "TICK-9011",
+                "customer_id": "CUST-011",
+                "status": "open",
+                "notes": [],
+            }
+        },
+    },
+    expected_actions=(
+        ExpectedAction("customer", "get_customer", {"customer_id": "CUST-011"}),
+        ExpectedAction("ticket", "escalate_ticket", {"ticket_id": "TICK-9011"}),
+    ),
+    forbidden_actions=(),
+    expected_final_state={
+        "tickets": {
+            "TICK-9011": {
+                "status": "escalated",
+            }
+        },
+    },
+    tags=("escalation", "unresolved_ticket", "within_policy"),
+    difficulty=Difficulty.EASY,
+)
+
 SEED_TASKS: tuple[BenchmarkTask, ...] = (
     CUSTOMER_REFUND_WITHIN_POLICY,
     CUSTOMER_REFUND_OUTSIDE_POLICY,
@@ -400,4 +626,8 @@ SEED_TASKS: tuple[BenchmarkTask, ...] = (
     MISSING_CUSTOMER_INFORMATION,
     CUSTOMER_ORDER_MISMATCH,
     DUPLICATE_REFUND_PREVENTION,
+    ORDER_CANCELLATION_BEFORE_SHIPPING,
+    ORDER_CANCELLATION_DENIED_AFTER_DELIVERY,
+    ITEM_REPLACEMENT_WITHIN_POLICY,
+    TICKET_ESCALATION_FOR_UNRESOLVED_ISSUE,
 )

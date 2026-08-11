@@ -21,8 +21,11 @@ class CustomerService:
 
 
 class OrderService:
-    def __init__(self, state: SupportState) -> None:
+    CANCELLABLE_STATUSES = frozenset({"placed", "processing", "shipped"})
+
+    def __init__(self, state: SupportState, policy_service: "PolicyService") -> None:
         self._state = state
+        self._policy_service = policy_service
 
     def get_order(self, order_id: str) -> dict[str, Any]:
         order = self._state.orders.get(order_id)
@@ -30,9 +33,49 @@ class OrderService:
             raise NotFoundError(f"Order not found: {order_id}")
         return deepcopy(order)
 
+    def cancel_order(self, order_id: str, requesting_customer_id: str) -> dict[str, Any]:
+        order = self._state.orders.get(order_id)
+        if order is None:
+            raise NotFoundError(f"Order not found: {order_id}")
+        if order["customer_id"] != requesting_customer_id:
+            raise PolicyViolationError(
+                f"Order {order_id} does not belong to customer {requesting_customer_id}"
+            )
+        if order["status"] not in self.CANCELLABLE_STATUSES:
+            raise PolicyViolationError(
+                f"Order cannot be cancelled once its status is {order['status']!r}: {order_id}"
+            )
+
+        order["status"] = "cancelled"
+        return deepcopy(order)
+
+    def replace_item(
+        self, order_id: str, requesting_customer_id: str, sku: str, reason: str
+    ) -> dict[str, Any]:
+        order = self._state.orders.get(order_id)
+        if order is None:
+            raise NotFoundError(f"Order not found: {order_id}")
+        if order["customer_id"] != requesting_customer_id:
+            raise PolicyViolationError(
+                f"Order {order_id} does not belong to customer {requesting_customer_id}"
+            )
+        if not any(item["sku"] == sku for item in order.get("items", [])):
+            raise NotFoundError(f"Item not found on order {order_id}: {sku}")
+        if order_id in self._state.replacements:
+            raise PolicyViolationError(f"A replacement already exists for order: {order_id}")
+
+        policy = self._policy_service.check_replacement_policy(order_id)
+        if not policy["eligible"]:
+            raise PolicyViolationError(f"Order is not eligible for replacement: {order_id}")
+
+        replacement = {"order_id": order_id, "sku": sku, "reason": reason}
+        self._state.replacements[order_id] = replacement
+        return deepcopy(replacement)
+
 
 class PolicyService:
     REFUND_WINDOW_DAYS = 30
+    REPLACEMENT_WINDOW_DAYS = 30
 
     def __init__(self, state: SupportState) -> None:
         self._state = state
@@ -50,6 +93,21 @@ class PolicyService:
             "order_id": order_id,
             "eligible": eligible,
             "max_refund_cents": order["total_cents"] if eligible else 0,
+            "reason": "within_window" if eligible else "outside_policy",
+        }
+
+    def check_replacement_policy(self, order_id: str) -> dict[str, Any]:
+        order = self._state.orders.get(order_id)
+        if order is None:
+            raise NotFoundError(f"Order not found: {order_id}")
+
+        eligible = (
+            order["status"] == "delivered"
+            and order["delivered_days_ago"] <= self.REPLACEMENT_WINDOW_DAYS
+        )
+        return {
+            "order_id": order_id,
+            "eligible": eligible,
             "reason": "within_window" if eligible else "outside_policy",
         }
 
@@ -88,6 +146,8 @@ class RefundService:
 
 
 class TicketService:
+    ESCALATABLE_STATUSES = frozenset({"open", "pending"})
+
     def __init__(self, state: SupportState) -> None:
         self._state = state
 
@@ -105,4 +165,18 @@ class TicketService:
             ticket["status"] = status
         if note is not None:
             ticket.setdefault("notes", []).append(note)
+        return deepcopy(ticket)
+
+    def escalate_ticket(self, ticket_id: str, reason: str) -> dict[str, Any]:
+        ticket = self._state.tickets.get(ticket_id)
+        if ticket is None:
+            raise NotFoundError(f"Ticket not found: {ticket_id}")
+        if ticket["status"] not in self.ESCALATABLE_STATUSES:
+            raise PolicyViolationError(
+                f"Ticket cannot be escalated from status {ticket['status']!r}: {ticket_id}"
+            )
+
+        ticket["status"] = "escalated"
+        ticket["escalation_count"] = ticket.get("escalation_count", 0) + 1
+        ticket.setdefault("notes", []).append(reason)
         return deepcopy(ticket)

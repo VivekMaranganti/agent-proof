@@ -18,8 +18,8 @@ class SupportToolEnvironment:
     def __init__(self, initial_state: dict) -> None:
         self.state = SupportState.from_mapping(initial_state)
         self.customer = CustomerService(self.state)
-        self.order = OrderService(self.state)
         self.policy = PolicyService(self.state)
+        self.order = OrderService(self.state, self.policy)
         self.refund = RefundService(self.state, self.policy)
         self.ticket = TicketService(self.state)
 
