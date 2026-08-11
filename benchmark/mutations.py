@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 import re
 from dataclasses import replace
+from typing import Callable
 
 from benchmark.schema import AdversarialVariant, BenchmarkTask, ForbiddenAction
 
@@ -182,3 +183,24 @@ MUTATIONS = (
     create_missing_customer_information_variant,
     create_boundary_refund_amount_variant,
 )
+
+# Looked up by the mutation_type string an AdversarialVariant carries, so a
+# mutation can be re-applied by name (e.g. from a serialized suite config)
+# without importing each generator function individually.
+MUTATION_REGISTRY: dict[str, Callable[[BenchmarkTask, int], AdversarialVariant]] = {
+    "typo_injection": inject_typos,
+    "distractor_information": inject_distractor_information,
+    "conflicting_detail": inject_conflicting_detail,
+    "missing_customer_information": create_missing_customer_information_variant,
+    "boundary_refund_amount": create_boundary_refund_amount_variant,
+}
+
+
+def apply_mutation(mutation_type: str, task: BenchmarkTask, random_seed: int) -> AdversarialVariant:
+    """Apply a registered mutation to `task` by its mutation_type name."""
+
+    try:
+        mutation = MUTATION_REGISTRY[mutation_type]
+    except KeyError:
+        raise ValueError(f"Unknown mutation type: {mutation_type!r}") from None
+    return mutation(task, random_seed)
