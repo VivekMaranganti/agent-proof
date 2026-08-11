@@ -8,10 +8,10 @@ from benchmark.schema import AdversarialVariant, BenchmarkTask, ForbiddenAction
 
 VALID_SERVICE_OPERATIONS: dict[str, frozenset[str]] = {
     "customer": frozenset({"get_customer"}),
-    "order": frozenset({"get_order"}),
-    "policy": frozenset({"check_refund_policy"}),
+    "order": frozenset({"get_order", "cancel_order", "replace_item"}),
+    "policy": frozenset({"check_refund_policy", "check_replacement_policy"}),
     "refund": frozenset({"create_refund"}),
-    "ticket": frozenset({"update_ticket"}),
+    "ticket": frozenset({"update_ticket", "escalate_ticket"}),
 }
 
 _ID_ARGUMENT_TO_STATE_COLLECTION = {

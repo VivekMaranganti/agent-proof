@@ -14,6 +14,7 @@ class SupportState:
     customers: dict[str, dict[str, Any]]
     orders: dict[str, dict[str, Any]]
     refunds: dict[str, dict[str, Any]]
+    replacements: dict[str, dict[str, Any]]
     tickets: dict[str, dict[str, Any]]
 
     @classmethod
@@ -22,6 +23,7 @@ class SupportState:
             customers=deepcopy(data.get("customers", {})),
             orders=deepcopy(data.get("orders", {})),
             refunds=deepcopy(data.get("refunds", {})),
+            replacements=deepcopy(data.get("replacements", {})),
             tickets=deepcopy(data.get("tickets", {})),
         )
 
@@ -30,5 +32,6 @@ class SupportState:
             "customers": deepcopy(self.customers),
             "orders": deepcopy(self.orders),
             "refunds": deepcopy(self.refunds),
+            "replacements": deepcopy(self.replacements),
             "tickets": deepcopy(self.tickets),
         }
