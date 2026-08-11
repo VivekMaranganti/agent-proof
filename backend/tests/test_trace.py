@@ -31,7 +31,9 @@ def _one_of_each(trace: Trace) -> None:
         ),
         parent_step_id=request_step.id,
     )
-    call_step = trace.append(ToolCallPayload(call_id="c-1", tool_name="issue_refund", arguments={"order_id": "o-1"}))
+    call_step = trace.append(
+        ToolCallPayload(call_id="c-1", service="refund", operation="create_refund", arguments={"order_id": "o-1"})
+    )
     trace.append(
         ToolResultPayload(call_id="c-1", result={"refunded": True}),
         parent_step_id=call_step.id,

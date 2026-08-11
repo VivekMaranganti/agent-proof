@@ -59,13 +59,13 @@ def _result(client: TestClient, execution_id: str, passed: bool) -> None:
     assert response.status_code == 200
 
 
-def _tool_call(client: TestClient, execution_id: str, tool_name: str) -> None:
+def _tool_call(client: TestClient, execution_id: str, operation: str) -> None:
     response = client.post(
         f"/api/v1/executions/{execution_id}/trace-events",
         json={
             "sequence_no": 0,
             "event_type": "tool_call",
-            "payload": {"tool_name": tool_name, "arguments": {"order_id": "o-1"}},
+            "payload": {"call_id": "c-1", "service": "order", "operation": operation, "arguments": {"order_id": "o-1"}},
         },
     )
     assert response.status_code == 201
@@ -77,8 +77,8 @@ def test_comparison_attributes_a_wrong_tool_regression() -> None:
     candidate_run = _create_run(client, _create_version(client, "2222222"))
     baseline_execution = _create_execution(client, baseline_run, "refund-001")
     candidate_execution = _create_execution(client, candidate_run, "refund-001")
-    _tool_call(client, baseline_execution, "lookup_order")
-    _tool_call(client, candidate_execution, "issue_refund")
+    _tool_call(client, baseline_execution, "get_order")
+    _tool_call(client, candidate_execution, "create_refund")
     _result(client, baseline_execution, passed=True)
     _result(client, candidate_execution, passed=False)
 
@@ -96,7 +96,7 @@ def test_trace_sequence_numbers_are_unique_per_execution() -> None:
     client = TestClient(create_app(PlatformStore()))
     run_id = _create_run(client, _create_version(client, "3333333"))
     execution_id = _create_execution(client, run_id, "refund-002")
-    _tool_call(client, execution_id, "lookup_order")
+    _tool_call(client, execution_id, "get_order")
     duplicate = client.post(
         f"/api/v1/executions/{execution_id}/trace-events",
         json={"sequence_no": 0, "event_type": "tool_result", "payload": {}},
