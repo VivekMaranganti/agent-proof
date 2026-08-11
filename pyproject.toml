@@ -34,4 +34,4 @@ line-length = 100
 target-version = "py311"
 
 [tool.hatch.build.targets.wheel]
-packages = ["backend/app", "benchmark", "judges", "tool_environment"]
+packages = ["backend/app", "benchmark", "judges", "runner", "tool_environment"]
