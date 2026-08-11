@@ -134,7 +134,9 @@ def _event_divergence(left: TraceEvent, right: TraceEvent) -> TraceDivergenceTyp
     if left.event_type != right.event_type:
         return TraceDivergenceType.WRONG_TOOL
     if left.event_type == EventType.TOOL_CALL:
-        if left.payload.get("tool_name") != right.payload.get("tool_name"):
+        left_tool = (left.payload.get("service"), left.payload.get("operation"))
+        right_tool = (right.payload.get("service"), right.payload.get("operation"))
+        if left_tool != right_tool:
             return TraceDivergenceType.WRONG_TOOL
         if left.payload.get("arguments") != right.payload.get("arguments"):
             return TraceDivergenceType.INVALID_TOOL_ARGUMENT

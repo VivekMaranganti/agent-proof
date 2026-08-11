@@ -36,7 +36,8 @@ class ModelResponsePayload(BaseModel):
 class ToolCallPayload(BaseModel):
     event_type: Literal[EventType.TOOL_CALL] = EventType.TOOL_CALL
     call_id: str
-    tool_name: str
+    service: str
+    operation: str
     arguments: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -44,7 +45,6 @@ class ToolResultPayload(BaseModel):
     event_type: Literal[EventType.TOOL_RESULT] = EventType.TOOL_RESULT
     call_id: str
     result: Any = None
-    is_error: bool = False
 
 
 class RetryPayload(BaseModel):

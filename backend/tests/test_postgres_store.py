@@ -160,11 +160,19 @@ async def test_comparison_attributes_a_wrong_tool_regression(store: PostgresStor
     candidate_execution = await store.create_execution(candidate_run.id, TaskExecutionCreate(task_id="refund-001", task_seed=7))
     await store.append_trace_event(
         baseline_execution.id,
-        TraceEventCreate(sequence_no=0, event_type=EventType.TOOL_CALL, payload={"tool_name": "lookup_order", "arguments": {"order_id": "o-1"}}),
+        TraceEventCreate(
+            sequence_no=0,
+            event_type=EventType.TOOL_CALL,
+            payload={"call_id": "c-1", "service": "order", "operation": "get_order", "arguments": {"order_id": "o-1"}},
+        ),
     )
     await store.append_trace_event(
         candidate_execution.id,
-        TraceEventCreate(sequence_no=0, event_type=EventType.TOOL_CALL, payload={"tool_name": "issue_refund", "arguments": {"order_id": "o-1"}}),
+        TraceEventCreate(
+            sequence_no=0,
+            event_type=EventType.TOOL_CALL,
+            payload={"call_id": "c-1", "service": "refund", "operation": "create_refund", "arguments": {"order_id": "o-1"}},
+        ),
     )
     await store.record_result(
         baseline_execution.id,
