@@ -59,7 +59,19 @@ class RefundService:
         self._state = state
         self._policy_service = policy_service
 
-    def create_refund(self, order_id: str, amount_cents: int, reason: str) -> dict[str, Any]:
+    def create_refund(
+        self, order_id: str, requesting_customer_id: str, amount_cents: int, reason: str
+    ) -> dict[str, Any]:
+        order = self._state.orders.get(order_id)
+        if order is None:
+            raise NotFoundError(f"Order not found: {order_id}")
+        if order["customer_id"] != requesting_customer_id:
+            raise PolicyViolationError(
+                f"Order {order_id} does not belong to customer {requesting_customer_id}"
+            )
+        if order_id in self._state.refunds:
+            raise PolicyViolationError(f"A refund already exists for order: {order_id}")
+
         policy = self._policy_service.check_refund_policy(order_id)
         if not policy["eligible"]:
             raise PolicyViolationError(f"Order is not eligible for refund: {order_id}")

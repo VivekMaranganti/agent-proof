@@ -7,7 +7,7 @@ def _run_full_resolution(env: SupportToolEnvironment) -> tuple[ToolCall, ...]:
     env.customer.get_customer("CUST-001")
     env.order.get_order("ORD-1001")
     env.policy.check_refund_policy("ORD-1001")
-    env.refund.create_refund("ORD-1001", 4200, "damaged_item")
+    env.refund.create_refund("ORD-1001", "CUST-001", 4200, "damaged_item")
     env.ticket.update_ticket("TICK-9001", status="resolved")
 
     return (
@@ -68,7 +68,7 @@ def test_score_actions_reports_wrong_ticket_status_as_a_mismatch() -> None:
     env.customer.get_customer("CUST-001")
     env.order.get_order("ORD-1001")
     env.policy.check_refund_policy("ORD-1001")
-    env.refund.create_refund("ORD-1001", 4200, "damaged_item")
+    env.refund.create_refund("ORD-1001", "CUST-001", 4200, "damaged_item")
     env.ticket.update_ticket("TICK-9001", status="pending")
 
     calls = (
