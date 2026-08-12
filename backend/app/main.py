@@ -49,6 +49,10 @@ def create_app(store: Store | None = None) -> FastAPI:
     async def record_task_result(execution_id: UUID, payload: TaskExecutionResult) -> TaskExecution:
         return await app.state.store.record_result(execution_id, payload)
 
+    @app.get("/api/v1/executions/{execution_id}", response_model=TaskExecution)
+    async def get_task_execution(execution_id: UUID) -> TaskExecution:
+        return await app.state.store.get_execution(execution_id)
+
     @app.post(
         "/api/v1/executions/{execution_id}/trace-events",
         response_model=TraceEvent,
