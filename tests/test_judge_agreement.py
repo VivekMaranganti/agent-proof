@@ -6,7 +6,12 @@ from judges.llm import JudgeVerdict
 
 def _verdict(judge_name: str, label: str) -> JudgeVerdict:
     return JudgeVerdict(
-        judge_name=judge_name, rubric_version="1", label=label, confidence=0.9, rationale="r"
+        task_id="task-x",
+        judge_name=judge_name,
+        rubric_version="1",
+        label=label,
+        confidence=0.9,
+        rationale="r",
     )
 
 

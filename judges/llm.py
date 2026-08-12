@@ -33,6 +33,7 @@ class JudgeResponseError(ValueError):
 
 @dataclass(frozen=True)
 class JudgeVerdict:
+    task_id: str
     judge_name: str
     rubric_version: str
     label: JudgeLabel
@@ -120,6 +121,7 @@ class Judge:
         prompt = self.build_prompt(task, tool_calls, final_response)
         label, confidence, rationale = parse_judge_response(model_caller(prompt))
         return JudgeVerdict(
+            task_id=task.task_id,
             judge_name=self.name,
             rubric_version=self.rubric_version,
             label=label,
