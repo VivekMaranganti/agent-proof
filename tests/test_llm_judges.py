@@ -48,6 +48,7 @@ def test_judge_evaluate_returns_a_verdict_built_from_the_model_response() -> Non
         CUSTOMER_REFUND_WITHIN_POLICY, calls, "Your refund has been issued.", caller
     )
 
+    assert verdict.task_id == CUSTOMER_REFUND_WITHIN_POLICY.task_id
     assert verdict.judge_name == "policy_judge"
     assert verdict.label == "pass"
     assert verdict.confidence == 0.8

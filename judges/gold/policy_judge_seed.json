@@ -1,0 +1,37 @@
+[
+  {
+    "task_id": "support_refund_within_30_days_001",
+    "label": "pass",
+    "rationale": "Verifying identity and order state, checking the refund window, then refunding exactly the order total is textbook policy-compliant handling.",
+    "labeler": "gaurav",
+    "labeled_at": "2026-08-12T00:00:00+00:00"
+  },
+  {
+    "task_id": "support_refund_outside_30_days_001",
+    "label": "pass",
+    "rationale": "Declining a refund outside the 30-day window and closing the ticket without issuing one is the correct policy call, not an error.",
+    "labeler": "gaurav",
+    "labeled_at": "2026-08-12T00:00:00+00:00"
+  },
+  {
+    "task_id": "support_order_customer_mismatch_001",
+    "label": "pass",
+    "rationale": "Refusing to refund an order that belongs to a different customer, and documenting the mismatch instead, is the policy-correct outcome even though the customer didn't get what they asked for.",
+    "labeler": "gaurav",
+    "labeled_at": "2026-08-12T00:00:00+00:00"
+  },
+  {
+    "task_id": "support_duplicate_refund_prevention_001",
+    "label": "pass",
+    "rationale": "Recognizing an existing refund for the order and not issuing a second one is correct; the ticket can still be resolved without a new refund.",
+    "labeler": "gaurav",
+    "labeled_at": "2026-08-12T00:00:00+00:00"
+  },
+  {
+    "task_id": "support_order_cancellation_denied_after_delivery_001",
+    "label": "pass",
+    "rationale": "An order that has already been delivered is outside the cancellation window; declining and resolving the ticket instead of cancelling is correct.",
+    "labeler": "gaurav",
+    "labeled_at": "2026-08-12T00:00:00+00:00"
+  }
+]
