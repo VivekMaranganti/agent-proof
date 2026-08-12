@@ -52,17 +52,30 @@ agent-proof/
 
 ## Development setup
 
-This repository currently contains the project foundation. The first implementation milestone is a reproducible end-to-end run: one agent version, a seeded support task, a complete trace, and deterministic scoring.
-
 ```bash
 git clone https://github.com/VivekMaranganti/agent-proof.git
 cd agent-proof
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
 ```
 
 When active, your shell prompt should begin with `(.venv)`. Leave the environment with `deactivate`.
+
+Run the test suite with `pytest`; tests that need Postgres skip cleanly if it isn't running.
+
+### Reproducing the end-to-end milestone
+
+The first implementation milestone: one agent version, a seeded support task, a complete trace, and a deterministic score, persisted through the platform API and read back over that same API.
+
+```bash
+docker compose up -d postgres
+alembic upgrade head
+PYTHONPATH=".:backend" python scripts/run_demo_task.py
+```
+
+`scripts/run_demo_task.py` runs a scripted agent (there's no live model backend wired up yet, see `runner/model_client.py`) against the `support_refund_within_30_days_001` seed task through `runner.run_task`, scores the result with `judges.contracts.score_run`, and persists both the trace and the score through the same FastAPI app the platform serves. It prints the run id, execution id, pass/fail, and the number of trace steps persisted, and it's reproducible: rerunning it always produces a fresh run that passes the same way.
 
 ## Evaluation principles
 

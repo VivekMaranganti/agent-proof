@@ -102,3 +102,18 @@ def test_trace_sequence_numbers_are_unique_per_execution() -> None:
         json={"sequence_no": 0, "event_type": "tool_result", "payload": {}},
     )
     assert duplicate.status_code == 409
+
+
+def test_get_execution_returns_the_recorded_result() -> None:
+    client = TestClient(create_app(PlatformStore()))
+    run_id = _create_run(client, _create_version(client, "4444444"))
+    execution_id = _create_execution(client, run_id, "refund-003")
+    _result(client, execution_id, passed=True)
+
+    response = client.get(f"/api/v1/executions/{execution_id}")
+
+    assert response.status_code == 200
+    execution = response.json()
+    assert execution["id"] == execution_id
+    assert execution["status"] == "passed"
+    assert execution["passed"] is True
