@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
 
+from app.trace import ToolCallPayload, Trace
 from benchmark.schema import BenchmarkTask
+
+if TYPE_CHECKING:
+    from runner.runner import RunnerResult
 
 
 @dataclass(frozen=True)
@@ -57,6 +61,26 @@ def score_actions(
         forbidden_actions_seen=tuple(forbidden_seen),
         final_state_mismatches=final_state_mismatches,
     )
+
+
+def extract_tool_calls(trace: Trace) -> tuple[ToolCall, ...]:
+    """Pull the ordered ToolCall sequence out of a runner trace."""
+
+    return tuple(
+        ToolCall(step.payload.service, step.payload.operation, step.payload.arguments)
+        for step in trace
+        if isinstance(step.payload, ToolCallPayload)
+    )
+
+
+def score_run(task: BenchmarkTask, result: "RunnerResult") -> ContractScore:
+    """Score a completed runner result against a task's contract.
+
+    No manual tool-call extraction or snapshot wiring needed: this reads
+    directly off `RunnerResult.trace` and `RunnerResult.final_state`.
+    """
+
+    return score_actions(task, extract_tool_calls(result.trace), result.final_state)
 
 
 def _diff_final_state(expected: Any, actual: Any, path: str = "") -> tuple[str, ...]:
