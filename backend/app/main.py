@@ -11,10 +11,12 @@ from app.schemas import (
     AgentVersionCreate,
     EvaluationRun,
     EvaluationRunCreate,
+    RegressionDisposition,
     RunComparison,
     TaskExecution,
     TaskExecutionCreate,
     TaskExecutionResult,
+    TraceDivergenceType,
     TraceEvent,
     TraceEventCreate,
 )
@@ -57,8 +59,17 @@ def create_app(store: Store | None = None) -> FastAPI:
         return await app.state.store.create_execution(run_id, payload)
 
     @app.get("/api/v1/evaluation-runs/{run_id}/executions", response_model=list[TaskExecution])
-    async def get_run_executions(run_id: UUID) -> list[TaskExecution]:
-        return await app.state.store.get_run_executions(run_id)
+    async def get_run_executions(
+        run_id: UUID,
+        task_id: str | None = None,
+        passed: bool | None = None,
+    ) -> list[TaskExecution]:
+        executions = await app.state.store.get_run_executions(run_id)
+        if task_id is not None:
+            executions = [execution for execution in executions if execution.task_id == task_id]
+        if passed is not None:
+            executions = [execution for execution in executions if execution.passed == passed]
+        return executions
 
     @app.post("/api/v1/executions/{execution_id}/result", response_model=TaskExecution)
     async def record_task_result(execution_id: UUID, payload: TaskExecutionResult) -> TaskExecution:
@@ -88,8 +99,26 @@ def create_app(store: Store | None = None) -> FastAPI:
         return events[offset : offset + limit]
 
     @app.get("/api/v1/comparisons/{baseline_run_id}/{candidate_run_id}", response_model=RunComparison)
-    async def get_comparison(baseline_run_id: UUID, candidate_run_id: UUID) -> RunComparison:
-        return await compare_runs(app.state.store, baseline_run_id, candidate_run_id)
+    async def get_comparison(
+        baseline_run_id: UUID,
+        candidate_run_id: UUID,
+        task_id: str | None = None,
+        disposition: RegressionDisposition | None = None,
+        divergence_type: TraceDivergenceType | None = None,
+    ) -> RunComparison:
+        comparison = await compare_runs(app.state.store, baseline_run_id, candidate_run_id)
+        results = comparison.results
+        if task_id is not None:
+            results = [result for result in results if result.task_id == task_id]
+        if disposition is not None:
+            results = [result for result in results if result.disposition == disposition]
+        if divergence_type is not None:
+            results = [
+                result
+                for result in results
+                if result.attribution is not None and result.attribution.divergence_type == divergence_type
+            ]
+        return comparison.model_copy(update={"results": results})
 
     return app
 

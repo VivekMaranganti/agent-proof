@@ -87,12 +87,12 @@ Interactive docs (generated from the live schema) are at `/docs` once the app is
 | GET | `/api/v1/agent-versions/{id}` | Fetch an agent version |
 | POST | `/api/v1/evaluation-runs` | Start a run against an agent version |
 | POST | `/api/v1/evaluation-runs/{run_id}/executions` | Create a task execution within a run |
-| GET | `/api/v1/evaluation-runs/{run_id}/executions` | List a run's executions |
+| GET | `/api/v1/evaluation-runs/{run_id}/executions` | List a run's executions. Filterable: `task_id`, `passed` |
 | POST | `/api/v1/executions/{id}/trace-events` | Append one ordered trace step |
 | GET | `/api/v1/executions/{id}/trace` | Read an execution's trace, ordered by `sequence_no`. Paginated: `limit` (default 200, max 1000) and `offset` query params; total count is in the `X-Total-Count` response header |
 | POST | `/api/v1/executions/{id}/result` | Record an execution's deterministic score |
 | GET | `/api/v1/executions/{id}` | Fetch an execution's recorded result |
-| GET | `/api/v1/comparisons/{baseline_run_id}/{candidate_run_id}` | Paired comparison: per-task disposition, latency/cost deltas, and first-divergence attribution for regressions |
+| GET | `/api/v1/comparisons/{baseline_run_id}/{candidate_run_id}` | Paired comparison: per-task disposition, latency/cost deltas, and first-divergence attribution for regressions. Filterable: `task_id`, `disposition`, `divergence_type` (only narrows `results`; `compared_tasks`/`regressions`/`improvements` always reflect the whole comparison) |
 
 ## Evaluation principles
 
