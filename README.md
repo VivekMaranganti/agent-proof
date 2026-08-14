@@ -77,6 +77,23 @@ PYTHONPATH=".:backend" python scripts/run_demo_task.py
 
 `scripts/run_demo_task.py` runs a scripted agent (there's no live model backend wired up yet, see `runner/model_client.py`) against the `support_refund_within_30_days_001` seed task through `runner.run_task`, scores the result with `judges.contracts.score_run`, and persists both the trace and the score through the same FastAPI app the platform serves. It prints the run id, execution id, pass/fail, and the number of trace steps persisted, and it's reproducible: rerunning it always produces a fresh run that passes the same way.
 
+### Deployed demo (full stack)
+
+Brings up Postgres, Redis, the API, and a worker as containers, all built from the same image.
+
+```bash
+docker compose up -d --build
+docker compose run --rm api python scripts/seed_demo_data.py
+```
+
+The first command starts `postgres` and `redis`, runs a one-shot `migrate` service (`alembic upgrade head`) that `api` and `worker` both wait on before starting, then brings up `api` (`http://localhost:8000`, see the Platform API table below) and `worker` (`python -m runner.worker`, claims jobs off the Redis queue forever — see `runner/worker.py`'s `serve_forever`).
+
+`scripts/seed_demo_data.py` seeds the same baseline/candidate regression scenario as `scripts/run_demo_comparison.py` (three seeded tasks, one genuine regression on `support_refund_within_30_days_001`), but into the stack's real Postgres instead of an in-process store, and prints a ready-to-use comparison URL. Re-running it just adds another baseline/candidate pair rather than erroring, so it's a manual step, not an automatic one on every `docker compose up`.
+
+The frontend isn't containerized yet — run it separately with `npm run dev` in `frontend/` (see `frontend/README.md`), pointed at `http://localhost:8000` via `VITE_API_BASE_URL`.
+
+Tear down with `docker compose down` (add `-v` to also drop the seeded data).
+
 ## Platform API
 
 Interactive docs (generated from the live schema) are at `/docs` once the app is running. Summary of the surface:

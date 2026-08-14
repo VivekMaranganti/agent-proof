@@ -27,6 +27,42 @@ services:
       timeout: 2s
       retries: 15
 
+  migrate:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+asyncpg://agentproof:agentproof@postgres:5432/agentproof
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: alembic upgrade head
+
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+asyncpg://agentproof:agentproof@postgres:5432/agentproof
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+asyncpg://agentproof:agentproof@postgres:5432/agentproof
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    command: python -m runner.worker
+
 volumes:
   postgres_data:
   redis_data:
