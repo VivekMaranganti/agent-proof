@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 import re
 from dataclasses import replace
-from typing import Callable
+from typing import Callable, Sequence
 
 from benchmark.schema import AdversarialVariant, BenchmarkTask, ForbiddenAction
 
@@ -23,6 +23,21 @@ DISTRACTOR_SENTENCES = (
     "The customer asked whether the company offers a loyalty program.",
     "The customer noted that their cat knocked over the delivery box.",
 )
+
+PARAPHRASE_REPLACEMENTS = {
+    "asks for a refund": "would like a refund",
+    "asks for a full refund": "would like a full refund",
+    "arrived damaged": "was damaged on arrival",
+    "wants to cancel": "would like to cancel",
+    "stopped working": "no longer works",
+}
+
+NOISE_FIELDS = {
+    "loyalty_tier": "silver",
+    "packaging": "eco",
+    "warehouse_region": "west-2",
+    "internal_batch_id": "BATCH-4471",
+}
 
 _DOLLAR_AMOUNT_PATTERN = re.compile(r"\$(\d+)\.(\d{2})")
 _CUSTOMER_MENTION_PATTERN = re.compile(r"Customer (CUST-\d+)")
@@ -82,6 +97,58 @@ def inject_conflicting_detail(task: BenchmarkTask, random_seed: int) -> Adversar
         tags=task.tags + ("adversarial", "conflicting_detail"),
     )
     return AdversarialVariant(mutated, task.task_id, "conflicting_detail", random_seed, True)
+
+
+def inject_paraphrase(task: BenchmarkTask, random_seed: int) -> AdversarialVariant:
+    """Reword part of the request without changing any fact it states."""
+
+    rng = random.Random(random_seed)
+    candidates = [phrase for phrase in PARAPHRASE_REPLACEMENTS if phrase in task.input]
+    if not candidates:
+        return AdversarialVariant(task, task.task_id, "paraphrase", random_seed, False)
+
+    phrase = rng.choice(candidates)
+    mutated = replace(
+        task,
+        task_id=f"{task.task_id}__paraphrase_{random_seed}",
+        input=task.input.replace(phrase, PARAPHRASE_REPLACEMENTS[phrase], 1),
+        tags=task.tags + ("adversarial", "paraphrase"),
+    )
+    return AdversarialVariant(mutated, task.task_id, "paraphrase", random_seed, True)
+
+
+def inject_tool_result_noise(task: BenchmarkTask, random_seed: int) -> AdversarialVariant:
+    """Add a benign, irrelevant field to one entity in the seeded state.
+
+    Tests whether the agent is thrown off by extra information a real tool
+    response might include that has no bearing on the task's contract.
+    """
+
+    rng = random.Random(random_seed)
+    candidates = [
+        (collection, entity_id)
+        for collection in ("customers", "orders", "tickets")
+        for entity_id in task.initial_state.get(collection, {})
+    ]
+    if not candidates:
+        return AdversarialVariant(task, task.task_id, "tool_result_noise", random_seed, False)
+
+    collection, entity_id = rng.choice(candidates)
+    field_name, field_value = rng.choice(list(NOISE_FIELDS.items()))
+
+    mutated_entities = {
+        **task.initial_state[collection],
+        entity_id: {**task.initial_state[collection][entity_id], field_name: field_value},
+    }
+    mutated_state = {**task.initial_state, collection: mutated_entities}
+
+    mutated = replace(
+        task,
+        task_id=f"{task.task_id}__noise_{random_seed}",
+        initial_state=mutated_state,
+        tags=task.tags + ("adversarial", "tool_result_noise"),
+    )
+    return AdversarialVariant(mutated, task.task_id, "tool_result_noise", random_seed, True)
 
 
 def create_missing_customer_information_variant(task: BenchmarkTask, random_seed: int) -> AdversarialVariant:
@@ -180,6 +247,8 @@ MUTATIONS = (
     inject_typos,
     inject_distractor_information,
     inject_conflicting_detail,
+    inject_paraphrase,
+    inject_tool_result_noise,
     create_missing_customer_information_variant,
     create_boundary_refund_amount_variant,
 )
@@ -191,6 +260,8 @@ MUTATION_REGISTRY: dict[str, Callable[[BenchmarkTask, int], AdversarialVariant]]
     "typo_injection": inject_typos,
     "distractor_information": inject_distractor_information,
     "conflicting_detail": inject_conflicting_detail,
+    "paraphrase": inject_paraphrase,
+    "tool_result_noise": inject_tool_result_noise,
     "missing_customer_information": create_missing_customer_information_variant,
     "boundary_refund_amount": create_boundary_refund_amount_variant,
 }
@@ -204,3 +275,35 @@ def apply_mutation(mutation_type: str, task: BenchmarkTask, random_seed: int) ->
     except KeyError:
         raise ValueError(f"Unknown mutation type: {mutation_type!r}") from None
     return mutation(task, random_seed)
+
+
+def compose_mutations(
+    task: BenchmarkTask, mutation_types: Sequence[str], random_seed: int
+) -> AdversarialVariant:
+    """Apply multiple registered mutation types to one task in sequence.
+
+    Lineage is preserved back to the true original task: `parent_task_id`
+    always names the task this composition started from, even though each
+    step's output feeds the next step's input. `mutation_type` on the result
+    is the applied types joined with "+", in the order they were applied.
+    Stops and reports failure at the first step whose precondition isn't met
+    (e.g. no dollar amount to make conflicting, no refund to shift boundary
+    on), rather than silently skipping it.
+    """
+
+    rng = random.Random(random_seed)
+    original_task_id = task.task_id
+    current_task = task
+    applied_types: list[str] = []
+
+    for mutation_type in mutation_types:
+        step_seed = rng.randint(0, 2**31 - 1)
+        variant = apply_mutation(mutation_type, current_task, step_seed)
+        applied_types.append(mutation_type)
+        if not variant.validator_result:
+            return AdversarialVariant(
+                current_task, original_task_id, "+".join(applied_types), random_seed, False
+            )
+        current_task = variant.task
+
+    return AdversarialVariant(current_task, original_task_id, "+".join(applied_types), random_seed, True)

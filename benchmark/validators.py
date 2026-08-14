@@ -23,7 +23,7 @@ _ID_ARGUMENT_TO_STATE_COLLECTION = {
 # Mutations that must not change the underlying success contract, only the
 # wording or surrounding detail of the task input.
 CONTRACT_PRESERVING_MUTATIONS = frozenset(
-    {"typo_injection", "distractor_information", "conflicting_detail"}
+    {"typo_injection", "distractor_information", "conflicting_detail", "paraphrase", "tool_result_noise"}
 )
 
 
@@ -54,7 +54,10 @@ def validate_variant(
         if not _referenced_ids_exist(expected.arguments, task.initial_state):
             return False
 
-    if variant.mutation_type in CONTRACT_PRESERVING_MUTATIONS:
+    # A composed mutation_type ("typo_injection+paraphrase") preserves the
+    # contract only if every step in the composition does.
+    applied_types = variant.mutation_type.split("+")
+    if all(mutation_type in CONTRACT_PRESERVING_MUTATIONS for mutation_type in applied_types):
         if task.expected_actions != parent.expected_actions:
             return False
         if _forbidden_signatures(task.forbidden_actions) != _forbidden_signatures(parent.forbidden_actions):

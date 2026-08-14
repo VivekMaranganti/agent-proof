@@ -1,8 +1,13 @@
+import pytest
+
 from benchmark.mutations import (
+    compose_mutations,
     create_boundary_refund_amount_variant,
     create_missing_customer_information_variant,
     inject_conflicting_detail,
     inject_distractor_information,
+    inject_paraphrase,
+    inject_tool_result_noise,
     inject_typos,
 )
 from benchmark.tasks import (
@@ -121,3 +126,81 @@ def test_validator_rejects_invalid_service_operation() -> None:
     bad_variant = variant.__class__(bad_task, variant.parent_task_id, variant.mutation_type, variant.random_seed, True)
 
     assert validate_variant(bad_variant, PARENT_TASKS_BY_ID, EXISTING_TASK_IDS) is False
+
+
+def test_paraphrase_leaves_contract_unchanged() -> None:
+    variant = inject_paraphrase(CUSTOMER_REFUND_WITHIN_POLICY, random_seed=1)
+
+    assert variant.validator_result is True
+    assert variant.task.expected_actions == CUSTOMER_REFUND_WITHIN_POLICY.expected_actions
+    assert "would like a refund" in variant.task.input
+    assert "asks for a refund" not in variant.task.input
+    assert validate_variant(variant, PARENT_TASKS_BY_ID, EXISTING_TASK_IDS) is True
+
+
+def test_paraphrase_is_a_noop_when_no_known_phrase_is_present() -> None:
+    from dataclasses import replace
+
+    phraseless_task = replace(CUSTOMER_REFUND_WITHIN_POLICY, input="Nothing matches here.")
+
+    variant = inject_paraphrase(phraseless_task, random_seed=1)
+
+    assert variant.validator_result is False
+
+
+def test_tool_result_noise_adds_a_benign_field_without_changing_the_contract() -> None:
+    variant = inject_tool_result_noise(CUSTOMER_REFUND_WITHIN_POLICY, random_seed=2)
+
+    assert variant.validator_result is True
+    assert variant.task.expected_actions == CUSTOMER_REFUND_WITHIN_POLICY.expected_actions
+    assert variant.task.initial_state != CUSTOMER_REFUND_WITHIN_POLICY.initial_state
+    assert validate_variant(variant, PARENT_TASKS_BY_ID, EXISTING_TASK_IDS) is True
+
+
+def test_tool_result_noise_is_deterministic_for_the_same_seed() -> None:
+    first = inject_tool_result_noise(CUSTOMER_REFUND_WITHIN_POLICY, random_seed=5)
+    second = inject_tool_result_noise(CUSTOMER_REFUND_WITHIN_POLICY, random_seed=5)
+
+    assert first.task.initial_state == second.task.initial_state
+
+
+def test_compose_mutations_applies_each_type_in_order_and_preserves_lineage() -> None:
+    variant = compose_mutations(
+        CUSTOMER_REFUND_WITHIN_POLICY, ["typo_injection", "distractor_information"], random_seed=1
+    )
+
+    assert variant.validator_result is True
+    assert variant.mutation_type == "typo_injection+distractor_information"
+    assert variant.parent_task_id == CUSTOMER_REFUND_WITHIN_POLICY.task_id
+    assert variant.task.expected_actions == CUSTOMER_REFUND_WITHIN_POLICY.expected_actions
+    assert validate_variant(variant, PARENT_TASKS_BY_ID, EXISTING_TASK_IDS) is True
+
+
+def test_compose_mutations_is_deterministic_for_the_same_seed() -> None:
+    first = compose_mutations(
+        CUSTOMER_REFUND_WITHIN_POLICY, ["typo_injection", "distractor_information"], random_seed=7
+    )
+    second = compose_mutations(
+        CUSTOMER_REFUND_WITHIN_POLICY, ["typo_injection", "distractor_information"], random_seed=7
+    )
+
+    assert first.task.input == second.task.input
+    assert first.task.task_id == second.task.task_id
+
+
+def test_compose_mutations_stops_at_the_first_step_that_cannot_apply() -> None:
+    # CUSTOMER_REFUND_WITHIN_POLICY's input has no dollar amount for
+    # conflicting_detail to latch onto, so that step should fail and the
+    # composition should report failure rather than silently skip it.
+    variant = compose_mutations(
+        CUSTOMER_REFUND_WITHIN_POLICY, ["conflicting_detail", "typo_injection"], random_seed=1
+    )
+
+    assert variant.validator_result is False
+    assert variant.mutation_type == "conflicting_detail"
+    assert variant.task == CUSTOMER_REFUND_WITHIN_POLICY
+
+
+def test_compose_mutations_rejects_an_unknown_mutation_type() -> None:
+    with pytest.raises(ValueError):
+        compose_mutations(CUSTOMER_REFUND_WITHIN_POLICY, ["not_a_real_mutation"], random_seed=1)
