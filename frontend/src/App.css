@@ -27,7 +27,8 @@
 }
 
 .comparison-page,
-.trace-replay-page {
+.trace-replay-page,
+.task-detail-page {
   width: 100%;
   max-width: 960px;
   margin: 0 auto;
@@ -167,6 +168,12 @@
 .pass-unknown {
   background: var(--code-bg);
   color: var(--text);
+}
+
+.pass-badge-button {
+  font: inherit;
+  border: none;
+  cursor: pointer;
 }
 
 .disposition-stable_pass {
@@ -384,4 +391,125 @@
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.task-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.task-detail-header .task-id {
+  font-size: 14px;
+}
+
+.task-detail-header button {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--text-h);
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.execution-status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.execution-status-passed {
+  background: rgba(22, 163, 74, 0.15);
+  color: #16a34a;
+}
+
+.execution-status-failed,
+.execution-status-errored {
+  background: rgba(217, 45, 32, 0.15);
+  color: #d92d20;
+}
+
+.execution-status-pending,
+.execution-status-running {
+  background: rgba(217, 119, 6, 0.15);
+  color: #d97706;
+}
+
+.task-detail-page h2 {
+  font-size: 16px;
+  margin: 28px 0 10px;
+}
+
+.task-detail-page h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  margin: 0 0 8px;
+}
+
+.mismatch-group {
+  margin-bottom: 16px;
+}
+
+.mismatch-clean {
+  color: #16a34a;
+  font-size: 14px;
+  margin: 0;
+}
+
+.mismatch-list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+  font-family: var(--mono);
+  color: #d92d20;
+}
+
+.mismatch-list li {
+  margin-bottom: 4px;
+}
+
+.task-input {
+  padding: 12px;
+  background: var(--code-bg);
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.contract-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.action-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+}
+
+.action-list li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.action-list code {
+  font-family: var(--mono);
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.forbidden-reason {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text);
 }

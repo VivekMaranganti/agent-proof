@@ -67,3 +67,48 @@ export interface TraceEvent {
   execution_id: string;
   created_at: string;
 }
+
+export type ExecutionStatus = "pending" | "running" | "passed" | "failed" | "errored";
+
+export interface TaskExecution {
+  task_id: string;
+  task_seed: number;
+  id: string;
+  run_id: string;
+  status: ExecutionStatus;
+  passed: boolean | null;
+  final_output: string | null;
+  latency_ms: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  estimated_cost_usd: number | null;
+  missing_expected_actions: string[];
+  forbidden_actions_seen: string[];
+  final_state_mismatches: string[];
+  created_at: string;
+  finished_at: string | null;
+}
+
+export interface ExpectedActionContract {
+  service: string;
+  operation: string;
+  arguments: Record<string, unknown>;
+}
+
+export interface ForbiddenActionContract {
+  service: string;
+  operation: string;
+  reason: string;
+  arguments: Record<string, unknown>;
+}
+
+export interface TaskContract {
+  task_id: string;
+  input: string;
+  initial_state: Record<string, unknown>;
+  expected_actions: ExpectedActionContract[];
+  forbidden_actions: ForbiddenActionContract[];
+  expected_final_state: Record<string, unknown>;
+  tags: string[];
+  difficulty: string;
+}
