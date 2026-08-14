@@ -19,6 +19,8 @@ from app.schemas import (
     EvaluationRun,
     EvaluationRunCreate,
     ExecutionStatus,
+    JudgeVerdict,
+    JudgeVerdictCreate,
     TaskExecution,
     TaskExecutionCreate,
     TaskExecutionResult,
@@ -50,6 +52,10 @@ class Store(Protocol):
 
     async def get_trace(self, execution_id: UUID) -> list[TraceEvent]: ...
 
+    async def append_judge_verdict(self, execution_id: UUID, payload: JudgeVerdictCreate) -> JudgeVerdict: ...
+
+    async def get_judge_verdicts(self, execution_id: UUID) -> list[JudgeVerdict]: ...
+
 
 class PlatformStore:
     def __init__(self) -> None:
@@ -57,6 +63,7 @@ class PlatformStore:
         self.runs: dict[UUID, EvaluationRun] = {}
         self.executions: dict[UUID, TaskExecution] = {}
         self.events_by_execution: dict[UUID, list[TraceEvent]] = defaultdict(list)
+        self.verdicts_by_execution: dict[UUID, list[JudgeVerdict]] = defaultdict(list)
 
     async def create_agent_version(self, payload: AgentVersionCreate) -> AgentVersion:
         version = AgentVersion(**payload.model_dump(), created_at=utc_now())
@@ -115,3 +122,13 @@ class PlatformStore:
     async def get_trace(self, execution_id: UUID) -> list[TraceEvent]:
         await self.get_execution(execution_id)
         return list(self.events_by_execution[execution_id])
+
+    async def append_judge_verdict(self, execution_id: UUID, payload: JudgeVerdictCreate) -> JudgeVerdict:
+        await self.get_execution(execution_id)
+        verdict = JudgeVerdict(**payload.model_dump(), execution_id=execution_id, created_at=utc_now())
+        self.verdicts_by_execution[execution_id].append(verdict)
+        return verdict
+
+    async def get_judge_verdicts(self, execution_id: UUID) -> list[JudgeVerdict]:
+        await self.get_execution(execution_id)
+        return list(self.verdicts_by_execution[execution_id])

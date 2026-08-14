@@ -111,7 +111,11 @@ Interactive docs (generated from the live schema) are at `/docs` once the app is
 | GET | `/api/v1/executions/{id}/trace` | Read an execution's trace, ordered by `sequence_no`. Paginated: `limit` (default 200, max 1000) and `offset` query params; total count is in the `X-Total-Count` response header |
 | POST | `/api/v1/executions/{id}/result` | Record an execution's deterministic score |
 | GET | `/api/v1/executions/{id}` | Fetch an execution's recorded result, including contract-check detail (`missing_expected_actions`, `forbidden_actions_seen`, `final_state_mismatches`) |
+| POST | `/api/v1/executions/{id}/judge-verdicts` | Record one LLM judge's verdict (label, confidence, rationale) for an execution |
+| GET | `/api/v1/executions/{id}/judge-verdicts` | List an execution's judge verdicts |
 | GET | `/api/v1/comparisons/{baseline_run_id}/{candidate_run_id}` | Paired comparison: per-task disposition, latency/cost deltas, and first-divergence attribution for regressions. Filterable: `task_id`, `disposition`, `divergence_type` (only narrows `results`; `compared_tasks`/`regressions`/`improvements` always reflect the whole comparison) |
+
+`judges/orchestration.py`'s `run_judges` decides which judges apply to an execution; `runner/worker.py`'s `process_job` runs them and persists verdicts, but only when given a `judge_model_caller` - it's opt-in, not automatic, and nothing wires one up by default since there's still no live model backend (same gap as the agent's own `ModelClient`, see `runner/model_client.py`). Judge evaluation cadence (every execution, a sample, on-demand only) is a call for whoever wires a real caller in, not decided here.
 
 ## Evaluation principles
 

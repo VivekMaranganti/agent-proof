@@ -131,6 +131,37 @@ async def test_process_job_persists_contract_score_detail_not_just_pass_fail(sto
     assert "refund.create_refund" in execution.missing_expected_actions
 
 
+async def test_process_job_without_judge_model_caller_runs_no_judges(store: PlatformStore) -> None:
+    job = await _seeded_job(store)
+
+    await process_job(store, TASK_REGISTRY, job)
+
+    assert await store.get_judge_verdicts(job.execution_id) == []
+
+
+async def test_process_job_with_judge_model_caller_persists_verdicts(store: PlatformStore) -> None:
+    class QueuedModelCaller:
+        def __init__(self, responses: list[str]) -> None:
+            self._responses = list(responses)
+
+        def __call__(self, prompt: str) -> str:
+            return self._responses.pop(0)
+
+    job = await _seeded_job(store)
+    judge_caller = QueuedModelCaller(
+        [
+            "LABEL: pass\nCONFIDENCE: 0.85\nRATIONALE: Order lookup preceded the resolution.",
+            "LABEL: pass\nCONFIDENCE: 0.7\nRATIONALE: Reply was clear and complete.",
+        ]
+    )
+
+    await process_job(store, TASK_REGISTRY, job, judge_model_caller=judge_caller)
+
+    verdicts = await store.get_judge_verdicts(job.execution_id)
+    assert {verdict.judge_name for verdict in verdicts} == {"policy_judge", "response_quality_judge"}
+    assert all(verdict.execution_id == job.execution_id for verdict in verdicts)
+
+
 async def test_claim_and_process_one_acks_on_success(store: PlatformStore, queue: Queue) -> None:
     job = await _seeded_job(store)
     await queue.enqueue(job)

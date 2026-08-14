@@ -11,6 +11,8 @@ from app.schemas import (
     AgentVersionCreate,
     EvaluationRun,
     EvaluationRunCreate,
+    JudgeVerdict,
+    JudgeVerdictCreate,
     RegressionDisposition,
     RunComparison,
     TaskContract,
@@ -113,6 +115,18 @@ def create_app(store: Store | None = None) -> FastAPI:
         events = await app.state.store.get_trace(execution_id)
         response.headers["X-Total-Count"] = str(len(events))
         return events[offset : offset + limit]
+
+    @app.post(
+        "/api/v1/executions/{execution_id}/judge-verdicts",
+        response_model=JudgeVerdict,
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def append_judge_verdict(execution_id: UUID, payload: JudgeVerdictCreate) -> JudgeVerdict:
+        return await app.state.store.append_judge_verdict(execution_id, payload)
+
+    @app.get("/api/v1/executions/{execution_id}/judge-verdicts", response_model=list[JudgeVerdict])
+    async def get_judge_verdicts(execution_id: UUID) -> list[JudgeVerdict]:
+        return await app.state.store.get_judge_verdicts(execution_id)
 
     @app.get("/api/v1/comparisons/{baseline_run_id}/{candidate_run_id}", response_model=RunComparison)
     async def get_comparison(
