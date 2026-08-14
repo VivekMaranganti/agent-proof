@@ -10,13 +10,21 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db import session_factory as default_session_factory
-from app.models import AgentVersionModel, EvaluationRunModel, TaskExecutionModel, TraceEventModel
+from app.models import (
+    AgentVersionModel,
+    EvaluationRunModel,
+    JudgeVerdictModel,
+    TaskExecutionModel,
+    TraceEventModel,
+)
 from app.schemas import (
     AgentVersion,
     AgentVersionCreate,
     EvaluationRun,
     EvaluationRunCreate,
     ExecutionStatus,
+    JudgeVerdict,
+    JudgeVerdictCreate,
     TaskExecution,
     TaskExecutionCreate,
     TaskExecutionResult,
@@ -119,3 +127,23 @@ class PostgresStore:
                 .order_by(TraceEventModel.sequence_no)
             )
             return [TraceEvent.model_validate(row, from_attributes=True) for row in result.scalars()]
+
+    async def append_judge_verdict(self, execution_id: UUID, payload: JudgeVerdictCreate) -> JudgeVerdict:
+        async with self._session_factory() as session:
+            execution = await session.get(TaskExecutionModel, execution_id)
+            if execution is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="task execution not found")
+            row = JudgeVerdictModel(**payload.model_dump(), execution_id=execution_id, created_at=utc_now())
+            session.add(row)
+            await session.commit()
+            return JudgeVerdict.model_validate(row, from_attributes=True)
+
+    async def get_judge_verdicts(self, execution_id: UUID) -> list[JudgeVerdict]:
+        async with self._session_factory() as session:
+            execution = await session.get(TaskExecutionModel, execution_id)
+            if execution is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="task execution not found")
+            result = await session.execute(
+                select(JudgeVerdictModel).where(JudgeVerdictModel.execution_id == execution_id)
+            )
+            return [JudgeVerdict.model_validate(row, from_attributes=True) for row in result.scalars()]

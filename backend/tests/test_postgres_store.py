@@ -18,6 +18,7 @@ from app.schemas import (
     AgentVersionCreate,
     EvaluationRunCreate,
     EventType,
+    JudgeVerdictCreate,
     TaskExecutionCreate,
     TaskExecutionResult,
     TraceEventCreate,
@@ -51,7 +52,7 @@ async def _clean_tables():
     yield
     async with session_factory() as session:
         await session.execute(
-            text("TRUNCATE trace_events, task_executions, evaluation_runs, agent_versions RESTART IDENTITY CASCADE")
+            text("TRUNCATE judge_verdicts, trace_events, task_executions, evaluation_runs, agent_versions RESTART IDENTITY CASCADE")
         )
         await session.commit()
 
@@ -149,6 +150,38 @@ async def test_record_result_persists_contract_score_detail(store: PostgresStore
     assert fetched.missing_expected_actions == ("refund.create_refund",)
     assert fetched.forbidden_actions_seen == ()
     assert fetched.final_state_mismatches == ("refunds.ORD-1001: missing from final state",)
+
+
+async def test_append_and_get_judge_verdicts(store: PostgresStore) -> None:
+    version = await _agent_version(store)
+    run = await _run(store, version.id)
+    execution = await store.create_execution(run.id, TaskExecutionCreate(task_id="refund-001", task_seed=7))
+
+    await store.append_judge_verdict(
+        execution.id,
+        JudgeVerdictCreate(
+            judge_name="policy_judge",
+            rubric_version="v1",
+            label="pass",
+            confidence=0.9,
+            rationale="Identity was checked before acting.",
+        ),
+    )
+    await store.append_judge_verdict(
+        execution.id,
+        JudgeVerdictCreate(
+            judge_name="response_quality_judge",
+            rubric_version="v1",
+            label="uncertain",
+            confidence=0.4,
+            rationale="Reply was terse but not wrong.",
+        ),
+    )
+
+    verdicts = await store.get_judge_verdicts(execution.id)
+
+    assert {verdict.judge_name for verdict in verdicts} == {"policy_judge", "response_quality_judge"}
+    assert all(verdict.execution_id == execution.id for verdict in verdicts)
 
 
 async def test_append_trace_event_rejects_duplicate_sequence(store: PostgresStore) -> None:

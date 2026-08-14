@@ -14,7 +14,7 @@ from sqlalchemy import DateTime, Enum, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from app.schemas import EventType, ExecutionStatus, RunStatus
+from app.schemas import EventType, ExecutionStatus, JudgeLabel, RunStatus
 
 
 class Base(DeclarativeBase):
@@ -104,3 +104,20 @@ class TraceEventModel(Base):
         Index("ix_trace_events_execution_id", "execution_id"),
         UniqueConstraint("execution_id", "sequence_no", name="uq_trace_events_execution_sequence"),
     )
+
+
+class JudgeVerdictModel(Base):
+    __tablename__ = "judge_verdicts"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    execution_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("task_executions.id"), nullable=False
+    )
+    judge_name: Mapped[str] = mapped_column(nullable=False)
+    rubric_version: Mapped[str] = mapped_column(nullable=False)
+    label: Mapped[JudgeLabel] = mapped_column(_enum_column(JudgeLabel), nullable=False)
+    confidence: Mapped[float] = mapped_column(nullable=False)
+    rationale: Mapped[str] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(nullable=False)
+
+    __table_args__ = (Index("ix_judge_verdicts_execution_id", "execution_id"),)
