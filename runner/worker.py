@@ -6,6 +6,9 @@ shutdown signal. run_worker_loop is the thin real-usage wrapper around it.
 
 from __future__ import annotations
 
+import asyncio
+import os
+import socket
 from collections.abc import Mapping
 
 from app.execution_scoring import score_execution
@@ -83,3 +86,40 @@ async def run_worker_loop(
             break
         processed += 1
     return processed
+
+
+async def serve_forever(
+    store: Store,
+    queue: Queue,
+    task_registry: TaskRegistry,
+    consumer: str,
+    *,
+    block_ms: int = 5000,
+) -> None:
+    """Never returns. For a deployed worker process, not tests.
+
+    Unlike run_worker_loop, an empty queue isn't a stopping condition here - claim's
+    block_ms is what keeps this from busy-looping while idle.
+    """
+
+    await queue.ensure_group()
+    while True:
+        await claim_and_process_one(store, queue, task_registry, consumer, block_ms=block_ms)
+
+
+def _main() -> None:
+    from app.postgres_store import PostgresStore
+    from app.queue import Queue, create_redis_client
+    from benchmark.tasks import SEED_TASKS
+
+    store = PostgresStore()
+    redis = create_redis_client()
+    queue = Queue(redis)
+    task_registry = task_registry_from(list(SEED_TASKS))
+    consumer = os.environ.get("WORKER_CONSUMER_NAME", socket.gethostname())
+
+    asyncio.run(serve_forever(store, queue, task_registry, consumer))
+
+
+if __name__ == "__main__":
+    _main()
