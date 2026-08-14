@@ -81,6 +81,8 @@ def test_mutation_registry_contains_every_mutation_type() -> None:
         "typo_injection",
         "distractor_information",
         "conflicting_detail",
+        "paraphrase",
+        "tool_result_noise",
         "missing_customer_information",
         "boundary_refund_amount",
     }
