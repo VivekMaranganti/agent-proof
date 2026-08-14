@@ -44,7 +44,13 @@ function PassBadge({ passed }: { passed: boolean | null }) {
   );
 }
 
-function AttributionNote({ comparison }: { comparison: PairedTaskComparison }) {
+function AttributionNote({
+  comparison,
+  onViewTrace,
+}: {
+  comparison: PairedTaskComparison;
+  onViewTrace: (executionId: string, highlightEventId: string | null) => void;
+}) {
   if (!comparison.attribution) return null;
   const { divergence_type, baseline_event_id, candidate_event_id } = comparison.attribution;
   return (
@@ -56,11 +62,23 @@ function AttributionNote({ comparison }: { comparison: PairedTaskComparison }) {
         <dt>Candidate event</dt>
         <dd>{candidate_event_id ?? "(none — run ended early)"}</dd>
       </dl>
+      <div className="attribution-actions">
+        <button type="button" onClick={() => onViewTrace(comparison.baseline_execution_id, baseline_event_id)}>
+          View baseline trace
+        </button>
+        <button type="button" onClick={() => onViewTrace(comparison.candidate_execution_id, candidate_event_id)}>
+          View candidate trace
+        </button>
+      </div>
     </details>
   );
 }
 
-export default function ComparisonPage() {
+export interface ComparisonPageProps {
+  onViewTrace: (executionId: string, highlightEventId: string | null) => void;
+}
+
+export default function ComparisonPage({ onViewTrace }: ComparisonPageProps) {
   const [baselineRunId, setBaselineRunId] = useState("");
   const [candidateRunId, setCandidateRunId] = useState("");
   const [comparison, setComparison] = useState<RunComparison | null>(null);
@@ -154,7 +172,7 @@ export default function ComparisonPage() {
                 <tr key={result.task_id} data-disposition={result.disposition}>
                   <td className="task-id">
                     {result.task_id}
-                    <AttributionNote comparison={result} />
+                    <AttributionNote comparison={result} onViewTrace={onViewTrace} />
                   </td>
                   <td>
                     <span className={`disposition-badge disposition-${result.disposition}`}>

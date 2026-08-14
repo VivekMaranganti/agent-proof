@@ -46,3 +46,24 @@ export interface RunComparison {
   improvements: number;
   results: PairedTaskComparison[];
 }
+
+export type EventType =
+  | "model_request"
+  | "model_response"
+  | "tool_call"
+  | "tool_result"
+  | "retry"
+  | "error"
+  | "final_answer";
+
+// payload shape depends on event_type; see backend/app/trace.py's *Payload classes.
+export interface TraceEvent {
+  id: string;
+  sequence_no: number;
+  event_type: EventType;
+  payload: Record<string, unknown>;
+  parent_event_id: string | null;
+  duration_ms: number | null;
+  execution_id: string;
+  created_at: string;
+}
