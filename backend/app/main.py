@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import FastAPI, status
+from fastapi import FastAPI, Query, Response, status
 
 from app.comparison import compare_runs
 from app.schemas import (
@@ -49,6 +49,10 @@ def create_app(store: Store | None = None) -> FastAPI:
     async def create_task_execution(run_id: UUID, payload: TaskExecutionCreate) -> TaskExecution:
         return await app.state.store.create_execution(run_id, payload)
 
+    @app.get("/api/v1/evaluation-runs/{run_id}/executions", response_model=list[TaskExecution])
+    async def get_run_executions(run_id: UUID) -> list[TaskExecution]:
+        return await app.state.store.get_run_executions(run_id)
+
     @app.post("/api/v1/executions/{execution_id}/result", response_model=TaskExecution)
     async def record_task_result(execution_id: UUID, payload: TaskExecutionResult) -> TaskExecution:
         return await app.state.store.record_result(execution_id, payload)
@@ -66,8 +70,15 @@ def create_app(store: Store | None = None) -> FastAPI:
         return await app.state.store.append_trace_event(execution_id, payload)
 
     @app.get("/api/v1/executions/{execution_id}/trace", response_model=list[TraceEvent])
-    async def get_trace(execution_id: UUID) -> list[TraceEvent]:
-        return await app.state.store.get_trace(execution_id)
+    async def get_trace(
+        execution_id: UUID,
+        response: Response,
+        limit: int = Query(default=200, ge=1, le=1000),
+        offset: int = Query(default=0, ge=0),
+    ) -> list[TraceEvent]:
+        events = await app.state.store.get_trace(execution_id)
+        response.headers["X-Total-Count"] = str(len(events))
+        return events[offset : offset + limit]
 
     @app.get("/api/v1/comparisons/{baseline_run_id}/{candidate_run_id}", response_model=RunComparison)
     async def get_comparison(baseline_run_id: UUID, candidate_run_id: UUID) -> RunComparison:
