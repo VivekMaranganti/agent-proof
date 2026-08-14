@@ -33,6 +33,10 @@ def create_app(store: Store | None = None) -> FastAPI:
     async def create_agent_version(payload: AgentVersionCreate) -> AgentVersion:
         return await app.state.store.create_agent_version(payload)
 
+    @app.get("/api/v1/agent-versions/{agent_version_id}", response_model=AgentVersion)
+    async def get_agent_version(agent_version_id: UUID) -> AgentVersion:
+        return await app.state.store.get_agent_version(agent_version_id)
+
     @app.post("/api/v1/evaluation-runs", response_model=EvaluationRun, status_code=status.HTTP_201_CREATED)
     async def create_evaluation_run(payload: EvaluationRunCreate) -> EvaluationRun:
         return await app.state.store.create_run(payload)
