@@ -3,6 +3,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import FastAPI, Query, Response, status
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.comparison import compare_runs
 from app.schemas import (
@@ -23,6 +24,12 @@ from app.store import Store
 
 def create_app(store: Store | None = None) -> FastAPI:
     app = FastAPI(title="AgentProof Platform API", version="0.1.0")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        allow_methods=["GET", "POST"],
+        allow_headers=["*"],
+    )
     app.state.store = store or PostgresStore()
 
     @app.get("/health")
