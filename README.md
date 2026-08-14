@@ -120,7 +120,7 @@ Interactive docs (generated from the live schema) are at `/docs` once the app is
 ## Evaluation principles
 
 - Agent versions and benchmark snapshots are immutable and reproducible.
-- Raw trace data is redacted before persistence.
+- Raw trace data is redacted before persistence (`backend/app/redaction.py`; key-name based - `name`, `email`, `phone`, `address`, etc., scrubbed at any nesting depth in a trace event's payload before it's written). Scoring and attribution run on the real, unredacted values in memory before that happens; only what's actually persisted (and anything read back from it later - comparisons, replay) is affected. That's a real tradeoff: if a redacted field is exactly where two runs differ, comparison can no longer see that difference after the fact.
 - Deterministic scoring is preferred for verifiable actions and state changes.
 - LLM judges use explicit rubrics; their individual labels, confidence, and disagreement are retained.
 - Regression attribution is evidence-backed trace correlation, not a claim of causal proof.

@@ -17,6 +17,7 @@ from app.models import (
     TaskExecutionModel,
     TraceEventModel,
 )
+from app.redaction import redact_payload
 from app.schemas import (
     AgentVersion,
     AgentVersionCreate,
@@ -90,7 +91,8 @@ class PostgresStore:
             execution = await session.get(TaskExecutionModel, execution_id)
             if execution is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="task execution not found")
-            row = TraceEventModel(**payload.model_dump(), execution_id=execution_id, created_at=utc_now())
+            redacted = payload.model_copy(update={"payload": redact_payload(payload.payload)})
+            row = TraceEventModel(**redacted.model_dump(), execution_id=execution_id, created_at=utc_now())
             session.add(row)
             try:
                 await session.commit()

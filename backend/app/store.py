@@ -13,6 +13,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
+from app.redaction import redact_payload
 from app.schemas import (
     AgentVersion,
     AgentVersionCreate,
@@ -103,7 +104,8 @@ class PlatformStore:
         events = self.events_by_execution[execution_id]
         if any(event.sequence_no == payload.sequence_no for event in events):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="duplicate trace sequence number")
-        event = TraceEvent(**payload.model_dump(), execution_id=execution_id, created_at=utc_now())
+        redacted = payload.model_copy(update={"payload": redact_payload(payload.payload)})
+        event = TraceEvent(**redacted.model_dump(), execution_id=execution_id, created_at=utc_now())
         events.append(event)
         events.sort(key=lambda item: item.sequence_no)
         return event
