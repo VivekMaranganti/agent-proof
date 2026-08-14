@@ -95,6 +95,8 @@ async def test_failed_contract_score_maps_to_failed_execution_result() -> None:
     assert contract_score.passed is False
     assert execution_result.status == "failed"
     assert execution_result.passed is False
+    assert execution_result.missing_expected_actions == contract_score.missing_expected_actions
+    assert "refund.create_refund" in execution_result.missing_expected_actions
 
 
 async def test_max_steps_exceeded_is_errored_regardless_of_partial_contract_progress() -> None:

@@ -2,7 +2,9 @@
 
 This module intentionally contains no benchmark, judge, or tool-sandbox implementation.
 Those are separate subsystems; the platform only stores their immutable references and
-the execution evidence they emit.
+the execution evidence they emit. TaskContract is the one read-only exception: it's a
+passthrough view of a BenchmarkTask for the API to serve, not something the platform
+persists.
 """
 
 from __future__ import annotations
@@ -106,6 +108,9 @@ class TaskExecution(TaskExecutionCreate):
     input_tokens: int | None = Field(default=None, ge=0)
     output_tokens: int | None = Field(default=None, ge=0)
     estimated_cost_usd: float | None = Field(default=None, ge=0)
+    missing_expected_actions: tuple[str, ...] = ()
+    forbidden_actions_seen: tuple[str, ...] = ()
+    final_state_mismatches: tuple[str, ...] = ()
     created_at: datetime
     finished_at: datetime | None = None
 
@@ -118,6 +123,9 @@ class TaskExecutionResult(BaseModel):
     input_tokens: int = Field(ge=0)
     output_tokens: int = Field(ge=0)
     estimated_cost_usd: float = Field(ge=0)
+    missing_expected_actions: tuple[str, ...] = ()
+    forbidden_actions_seen: tuple[str, ...] = ()
+    final_state_mismatches: tuple[str, ...] = ()
 
     @model_validator(mode="after")
     def terminal_status_matches_outcome(self) -> "TaskExecutionResult":
@@ -175,3 +183,33 @@ class RunComparison(BaseModel):
     regressions: int
     improvements: int
     results: list[PairedTaskComparison]
+
+
+class ExpectedActionContract(BaseModel):
+    service: str
+    operation: str
+    arguments: dict[str, Any] = Field(default_factory=dict)
+
+
+class ForbiddenActionContract(BaseModel):
+    service: str
+    operation: str
+    reason: str
+    arguments: dict[str, Any] = Field(default_factory=dict)
+
+
+class TaskContract(BaseModel):
+    """Read-only view of a benchmark.schema.BenchmarkTask for the API to serve.
+
+    Not a platform entity - nothing here is persisted. Built from
+    benchmark.serialization.task_to_dict, which already owns this shape.
+    """
+
+    task_id: str
+    input: str
+    initial_state: dict[str, Any]
+    expected_actions: list[ExpectedActionContract]
+    forbidden_actions: list[ForbiddenActionContract]
+    expected_final_state: dict[str, Any]
+    tags: list[str]
+    difficulty: str

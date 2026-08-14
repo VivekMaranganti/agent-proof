@@ -74,6 +74,9 @@ class TaskExecutionModel(Base):
     input_tokens: Mapped[int | None] = mapped_column(nullable=True)
     output_tokens: Mapped[int | None] = mapped_column(nullable=True)
     estimated_cost_usd: Mapped[float | None] = mapped_column(nullable=True)
+    missing_expected_actions: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    forbidden_actions_seen: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    final_state_mismatches: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
     finished_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
