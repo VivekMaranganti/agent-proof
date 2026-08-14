@@ -125,6 +125,32 @@ async def test_record_result_rejects_double_finalization(store: PostgresStore) -
     assert error.value.status_code == 409
 
 
+async def test_record_result_persists_contract_score_detail(store: PostgresStore) -> None:
+    version = await _agent_version(store)
+    run = await _run(store, version.id)
+    execution = await store.create_execution(run.id, TaskExecutionCreate(task_id="refund-001", task_seed=7))
+    result = TaskExecutionResult(
+        status="failed",
+        passed=False,
+        final_output="ticket resolved without a refund",
+        latency_ms=100,
+        input_tokens=30,
+        output_tokens=12,
+        estimated_cost_usd=0.001,
+        missing_expected_actions=("refund.create_refund",),
+        forbidden_actions_seen=(),
+        final_state_mismatches=("refunds.ORD-1001: missing from final state",),
+    )
+
+    recorded = await store.record_result(execution.id, result)
+    fetched = await store.get_execution(execution.id)
+
+    assert recorded.missing_expected_actions == ("refund.create_refund",)
+    assert fetched.missing_expected_actions == ("refund.create_refund",)
+    assert fetched.forbidden_actions_seen == ()
+    assert fetched.final_state_mismatches == ("refunds.ORD-1001: missing from final state",)
+
+
 async def test_append_trace_event_rejects_duplicate_sequence(store: PostgresStore) -> None:
     version = await _agent_version(store)
     run = await _run(store, version.id)

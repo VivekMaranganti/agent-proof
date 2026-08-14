@@ -103,6 +103,34 @@ async def test_process_job_runs_the_agent_and_persists_trace_and_result(store: P
     assert len(trace) > 0
 
 
+async def test_process_job_persists_contract_score_detail_not_just_pass_fail(store: PlatformStore) -> None:
+    from runner.model_client import ModelReply, ScriptedModelClient, ToolCallRequest
+
+    job = await _seeded_job(store, task_id="support_refund_within_30_days_001")
+    model = ScriptedModelClient(
+        [
+            ModelReply(
+                finish_reason="tool_calls",
+                tool_calls=(ToolCallRequest("c1", "customer", "get_customer", {"customer_id": "CUST-001"}),),
+            ),
+            ModelReply(
+                finish_reason="tool_calls",
+                tool_calls=(
+                    ToolCallRequest("c2", "ticket", "update_ticket", {"ticket_id": "TICK-9001", "status": "resolved"}),
+                ),
+            ),
+            ModelReply(finish_reason="stop", content="Ticket resolved."),
+        ]
+    )
+
+    await process_job(store, TASK_REGISTRY, job, model_client=model)
+
+    execution = await store.get_execution(job.execution_id)
+    assert execution.status == "failed"
+    assert execution.passed is False
+    assert "refund.create_refund" in execution.missing_expected_actions
+
+
 async def test_claim_and_process_one_acks_on_success(store: PlatformStore, queue: Queue) -> None:
     job = await _seeded_job(store)
     await queue.enqueue(job)

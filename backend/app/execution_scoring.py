@@ -34,5 +34,8 @@ def score_execution(task: BenchmarkTask, result: RunnerResult) -> tuple[TaskExec
         input_tokens=result.input_tokens,
         output_tokens=result.output_tokens,
         estimated_cost_usd=0.0,
+        missing_expected_actions=contract_score.missing_expected_actions,
+        forbidden_actions_seen=contract_score.forbidden_actions_seen,
+        final_state_mismatches=contract_score.final_state_mismatches,
     )
     return execution_result, contract_score

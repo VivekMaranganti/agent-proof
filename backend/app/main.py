@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import FastAPI, Query, Response, status
+from fastapi import FastAPI, HTTPException, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.comparison import compare_runs
@@ -13,6 +13,7 @@ from app.schemas import (
     EvaluationRunCreate,
     RegressionDisposition,
     RunComparison,
+    TaskContract,
     TaskExecution,
     TaskExecutionCreate,
     TaskExecutionResult,
@@ -22,6 +23,10 @@ from app.schemas import (
 )
 from app.postgres_store import PostgresStore
 from app.store import Store
+from benchmark.serialization import task_to_dict
+from benchmark.tasks import SEED_TASKS
+
+TASK_CONTRACTS: dict[str, dict] = {task.task_id: task_to_dict(task) for task in SEED_TASKS}
 
 
 def create_app(store: Store | None = None) -> FastAPI:
@@ -37,6 +42,17 @@ def create_app(store: Store | None = None) -> FastAPI:
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/api/v1/tasks", response_model=list[TaskContract])
+    def list_task_contracts() -> list[TaskContract]:
+        return [TaskContract.model_validate(data) for data in TASK_CONTRACTS.values()]
+
+    @app.get("/api/v1/tasks/{task_id}", response_model=TaskContract)
+    def get_task_contract(task_id: str) -> TaskContract:
+        data = TASK_CONTRACTS.get(task_id)
+        if data is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="task not found")
+        return TaskContract.model_validate(data)
 
     @app.post("/api/v1/agent-versions", response_model=AgentVersion, status_code=status.HTTP_201_CREATED)
     async def create_agent_version(payload: AgentVersionCreate) -> AgentVersion:
