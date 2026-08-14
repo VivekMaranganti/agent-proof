@@ -34,6 +34,8 @@ def utc_now() -> datetime:
 class Store(Protocol):
     async def create_agent_version(self, payload: AgentVersionCreate) -> AgentVersion: ...
 
+    async def get_agent_version(self, agent_version_id: UUID) -> AgentVersion: ...
+
     async def create_run(self, payload: EvaluationRunCreate) -> EvaluationRun: ...
 
     async def create_execution(self, run_id: UUID, payload: TaskExecutionCreate) -> TaskExecution: ...
@@ -60,6 +62,12 @@ class PlatformStore:
         version = AgentVersion(**payload.model_dump(), created_at=utc_now())
         self.agent_versions[version.id] = version
         return version
+
+    async def get_agent_version(self, agent_version_id: UUID) -> AgentVersion:
+        try:
+            return self.agent_versions[agent_version_id]
+        except KeyError as error:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="agent version not found") from error
 
     async def create_run(self, payload: EvaluationRunCreate) -> EvaluationRun:
         if payload.agent_version_id not in self.agent_versions:

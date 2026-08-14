@@ -77,6 +77,23 @@ PYTHONPATH=".:backend" python scripts/run_demo_task.py
 
 `scripts/run_demo_task.py` runs a scripted agent (there's no live model backend wired up yet, see `runner/model_client.py`) against the `support_refund_within_30_days_001` seed task through `runner.run_task`, scores the result with `judges.contracts.score_run`, and persists both the trace and the score through the same FastAPI app the platform serves. It prints the run id, execution id, pass/fail, and the number of trace steps persisted, and it's reproducible: rerunning it always produces a fresh run that passes the same way.
 
+## Platform API
+
+Interactive docs (generated from the live schema) are at `/docs` once the app is running. Summary of the surface:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/api/v1/agent-versions` | Register an agent version |
+| GET | `/api/v1/agent-versions/{id}` | Fetch an agent version |
+| POST | `/api/v1/evaluation-runs` | Start a run against an agent version |
+| POST | `/api/v1/evaluation-runs/{run_id}/executions` | Create a task execution within a run |
+| GET | `/api/v1/evaluation-runs/{run_id}/executions` | List a run's executions |
+| POST | `/api/v1/executions/{id}/trace-events` | Append one ordered trace step |
+| GET | `/api/v1/executions/{id}/trace` | Read an execution's trace, ordered by `sequence_no`. Paginated: `limit` (default 200, max 1000) and `offset` query params; total count is in the `X-Total-Count` response header |
+| POST | `/api/v1/executions/{id}/result` | Record an execution's deterministic score |
+| GET | `/api/v1/executions/{id}` | Fetch an execution's recorded result |
+| GET | `/api/v1/comparisons/{baseline_run_id}/{candidate_run_id}` | Paired comparison: per-task disposition, latency/cost deltas, and first-divergence attribution for regressions |
+
 ## Evaluation principles
 
 - Agent versions and benchmark snapshots are immutable and reproducible.

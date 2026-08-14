@@ -37,6 +37,13 @@ class PostgresStore:
             await session.commit()
             return AgentVersion.model_validate(row, from_attributes=True)
 
+    async def get_agent_version(self, agent_version_id: UUID) -> AgentVersion:
+        async with self._session_factory() as session:
+            row = await session.get(AgentVersionModel, agent_version_id)
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="agent version not found")
+            return AgentVersion.model_validate(row, from_attributes=True)
+
     async def create_run(self, payload: EvaluationRunCreate) -> EvaluationRun:
         async with self._session_factory() as session:
             agent_version = await session.get(AgentVersionModel, payload.agent_version_id)
