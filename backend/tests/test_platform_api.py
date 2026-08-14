@@ -152,3 +152,64 @@ def test_get_trace_paginates_and_reports_total_count() -> None:
 
     full = client.get(f"/api/v1/executions/{execution_id}/trace")
     assert len(full.json()) == 5
+
+
+def test_get_run_executions_filters_by_task_id_and_passed() -> None:
+    client = TestClient(create_app(PlatformStore()))
+    run_id = _create_run(client, _create_version(client, "7777777"))
+    passing = _create_execution(client, run_id, "refund-007")
+    failing = _create_execution(client, run_id, "refund-008")
+    _result(client, passing, passed=True)
+    _result(client, failing, passed=False)
+
+    by_task = client.get(f"/api/v1/evaluation-runs/{run_id}/executions", params={"task_id": "refund-007"})
+    assert {execution["id"] for execution in by_task.json()} == {passing}
+
+    by_correctness = client.get(f"/api/v1/evaluation-runs/{run_id}/executions", params={"passed": "false"})
+    assert {execution["id"] for execution in by_correctness.json()} == {failing}
+
+
+def test_get_comparison_filters_by_task_disposition_and_divergence_type() -> None:
+    client = TestClient(create_app(PlatformStore()))
+    baseline_run = _create_run(client, _create_version(client, "8888888"))
+    candidate_run = _create_run(client, _create_version(client, "9999999"))
+
+    regressed_baseline = _create_execution(client, baseline_run, "refund-009")
+    regressed_candidate = _create_execution(client, candidate_run, "refund-009")
+    _tool_call(client, regressed_baseline, "get_order")
+    _tool_call(client, regressed_candidate, "create_refund")
+    _result(client, regressed_baseline, passed=True)
+    _result(client, regressed_candidate, passed=False)
+
+    stable_baseline = _create_execution(client, baseline_run, "refund-010")
+    stable_candidate = _create_execution(client, candidate_run, "refund-010")
+    _result(client, stable_baseline, passed=True)
+    _result(client, stable_candidate, passed=True)
+
+    full = client.get(f"/api/v1/comparisons/{baseline_run}/{candidate_run}")
+    assert full.status_code == 200
+    assert {result["task_id"] for result in full.json()["results"]} == {"refund-009", "refund-010"}
+    # aggregates reflect the whole comparison, unaffected by any later filtering
+    assert full.json()["compared_tasks"] == 2
+    assert full.json()["regressions"] == 1
+
+    by_task = client.get(
+        f"/api/v1/comparisons/{baseline_run}/{candidate_run}", params={"task_id": "refund-010"}
+    )
+    assert [result["task_id"] for result in by_task.json()["results"]] == ["refund-010"]
+    assert by_task.json()["compared_tasks"] == 2
+
+    by_disposition = client.get(
+        f"/api/v1/comparisons/{baseline_run}/{candidate_run}", params={"disposition": "regression"}
+    )
+    assert [result["task_id"] for result in by_disposition.json()["results"]] == ["refund-009"]
+
+    by_divergence = client.get(
+        f"/api/v1/comparisons/{baseline_run}/{candidate_run}", params={"divergence_type": "wrong_tool"}
+    )
+    assert [result["task_id"] for result in by_divergence.json()["results"]] == ["refund-009"]
+
+    no_match = client.get(
+        f"/api/v1/comparisons/{baseline_run}/{candidate_run}", params={"divergence_type": "tool_error"}
+    )
+    assert no_match.json()["results"] == []
