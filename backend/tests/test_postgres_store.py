@@ -152,6 +152,30 @@ async def test_record_result_persists_contract_score_detail(store: PostgresStore
     assert fetched.final_state_mismatches == ("refunds.ORD-1001: missing from final state",)
 
 
+async def test_append_trace_event_redacts_sensitive_fields(store: PostgresStore) -> None:
+    version = await _agent_version(store)
+    run = await _run(store, version.id)
+    execution = await store.create_execution(run.id, TaskExecutionCreate(task_id="refund-001", task_seed=7))
+
+    recorded = await store.append_trace_event(
+        execution.id,
+        TraceEventCreate(
+            sequence_no=0,
+            event_type=EventType.TOOL_RESULT,
+            payload={
+                "call_id": "c-1",
+                "result": {"customer_id": "CUST-001", "name": "Avery Chen", "email": "avery@example.test"},
+            },
+        ),
+    )
+    fetched = (await store.get_trace(execution.id))[0]
+
+    for event in (recorded, fetched):
+        assert event.payload["result"]["customer_id"] == "CUST-001"
+        assert event.payload["result"]["name"] == "[REDACTED]"
+        assert event.payload["result"]["email"] == "[REDACTED]"
+
+
 async def test_append_and_get_judge_verdicts(store: PostgresStore) -> None:
     version = await _agent_version(store)
     run = await _run(store, version.id)

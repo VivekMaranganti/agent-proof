@@ -213,3 +213,28 @@ def test_get_comparison_filters_by_task_disposition_and_divergence_type() -> Non
         f"/api/v1/comparisons/{baseline_run}/{candidate_run}", params={"divergence_type": "tool_error"}
     )
     assert no_match.json()["results"] == []
+
+
+def test_trace_event_payload_is_redacted_before_persistence() -> None:
+    client = TestClient(create_app(PlatformStore()))
+    run_id = _create_run(client, _create_version(client, "1010101"))
+    execution_id = _create_execution(client, run_id, "refund-011")
+
+    response = client.post(
+        f"/api/v1/executions/{execution_id}/trace-events",
+        json={
+            "sequence_no": 0,
+            "event_type": "tool_result",
+            "payload": {
+                "call_id": "c-1",
+                "result": {"customer_id": "CUST-001", "name": "Avery Chen", "email": "avery@example.test"},
+            },
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["payload"]["result"]["name"] == "[REDACTED]"
+    assert response.json()["payload"]["result"]["customer_id"] == "CUST-001"
+
+    trace = client.get(f"/api/v1/executions/{execution_id}/trace").json()
+    assert trace[0]["payload"]["result"]["email"] == "[REDACTED]"
+    assert trace[0]["payload"]["result"]["customer_id"] == "CUST-001"
