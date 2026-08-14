@@ -131,6 +131,12 @@ def _first_divergence(
 
 
 def _event_divergence(left: TraceEvent, right: TraceEvent) -> TraceDivergenceType | None:
+    left_errored = left.event_type == EventType.ERROR
+    right_errored = right.event_type == EventType.ERROR
+    if left_errored != right_errored:
+        return TraceDivergenceType.TOOL_ERROR
+    if left_errored and right_errored:
+        return None if left.payload == right.payload else TraceDivergenceType.TOOL_ERROR
     if left.event_type != right.event_type:
         return TraceDivergenceType.WRONG_TOOL
     if left.event_type == EventType.TOOL_CALL:
@@ -140,8 +146,6 @@ def _event_divergence(left: TraceEvent, right: TraceEvent) -> TraceDivergenceTyp
             return TraceDivergenceType.WRONG_TOOL
         if left.payload.get("arguments") != right.payload.get("arguments"):
             return TraceDivergenceType.INVALID_TOOL_ARGUMENT
-    if right.event_type == EventType.ERROR:
-        return TraceDivergenceType.TOOL_ERROR
     if left.event_type == EventType.FINAL_ANSWER and left.payload.get("content") != right.payload.get("content"):
         return TraceDivergenceType.FINAL_ANSWER_MISMATCH
     return None

@@ -117,3 +117,38 @@ def test_get_execution_returns_the_recorded_result() -> None:
     assert execution["id"] == execution_id
     assert execution["status"] == "passed"
     assert execution["passed"] is True
+
+
+def test_get_run_executions_lists_all_executions_for_a_run() -> None:
+    client = TestClient(create_app(PlatformStore()))
+    run_id = _create_run(client, _create_version(client, "5555555"))
+    first = _create_execution(client, run_id, "refund-004")
+    second = _create_execution(client, run_id, "refund-005")
+
+    response = client.get(f"/api/v1/evaluation-runs/{run_id}/executions")
+
+    assert response.status_code == 200
+    execution_ids = {execution["id"] for execution in response.json()}
+    assert execution_ids == {first, second}
+
+
+def test_get_trace_paginates_and_reports_total_count() -> None:
+    client = TestClient(create_app(PlatformStore()))
+    run_id = _create_run(client, _create_version(client, "6666666"))
+    execution_id = _create_execution(client, run_id, "refund-006")
+    for sequence_no in range(5):
+        response = client.post(
+            f"/api/v1/executions/{execution_id}/trace-events",
+            json={"sequence_no": sequence_no, "event_type": "tool_result", "payload": {}},
+        )
+        assert response.status_code == 201
+
+    page = client.get(f"/api/v1/executions/{execution_id}/trace", params={"limit": 2, "offset": 1})
+
+    assert page.status_code == 200
+    assert page.headers["X-Total-Count"] == "5"
+    events = page.json()
+    assert [event["sequence_no"] for event in events] == [1, 2]
+
+    full = client.get(f"/api/v1/executions/{execution_id}/trace")
+    assert len(full.json()) == 5
