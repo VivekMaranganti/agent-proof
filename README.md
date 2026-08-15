@@ -127,6 +127,8 @@ Interactive docs (generated from the live schema) are at `/docs` once the app is
 
 `judges/orchestration.py`'s `run_judges` decides which judges apply to an execution; `runner/worker.py`'s `process_job` runs them and persists verdicts, but only when given a `judge_model_caller` - it's opt-in, not automatic, and nothing wires one up by default since there's still no live model backend (same gap as the agent's own `ModelClient`, see `runner/model_client.py`). Judge evaluation cadence (every execution, a sample, on-demand only) is a call for whoever wires a real caller in, not decided here.
 
+See `docs/data-model-invariants.md` for what each core entity (`AgentVersion`, `EvaluationRun`, `TaskExecution`, `TraceEvent`, `JudgeVerdict`) actually guarantees at the database level - identity, ordering, finalization, and what's deliberately left unenforced.
+
 ## Evaluation principles
 
 - Agent versions and benchmark snapshots are immutable and reproducible. AgentVersion identity is content-hashed (`backend/app/versioning.py`, over `model`/`system_prompt`/`tool_schema_hash`/`config` - not the `name` label or `git_sha` provenance): creating a version with content identical to an existing one returns that same version rather than minting a new identity, enforced by a real uniqueness constraint in Postgres, not just an app-level check. `benchmark.serialization.compute_content_hash` gives `SuiteSnapshot` the same guarantee.
