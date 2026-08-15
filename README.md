@@ -94,6 +94,16 @@ The frontend isn't containerized yet — run it separately with `npm run dev` in
 
 Tear down with `docker compose down` (add `-v` to also drop the seeded data).
 
+### Load testing
+
+```bash
+docker compose up -d postgres redis
+alembic upgrade head
+PYTHONPATH=".:backend" python scripts/load_test.py --jobs 100 --workers 4 --timeout 60
+```
+
+`scripts/load_test.py` seeds a batch of jobs against one seeded task, drains them with N concurrent workers, and reports wall-clock time, throughput, and p50/p95/p99 latency. Uses the deterministic `ReferenceAgentModelClient` oracle, not a live model, so it measures queue/worker overhead, not agent latency. See `docs/load-test-results.md` for baseline numbers from a real run and their limitations (single process, single machine - not a substitute for testing the actual multi-container deployment under real concurrent load).
+
 ## Platform API
 
 Interactive docs (generated from the live schema) are at `/docs` once the app is running. Summary of the surface:
@@ -124,7 +134,7 @@ Interactive docs (generated from the live schema) are at `/docs` once the app is
 - Deterministic scoring is preferred for verifiable actions and state changes.
 - LLM judges use explicit rubrics; their individual labels, confidence, and disagreement are retained.
 - Regression attribution is evidence-backed trace correlation, not a claim of causal proof.
-- Published performance and quality claims will come from reproducible scripts and benchmark reports.
+- Published performance and quality claims will come from reproducible scripts and benchmark reports (`scripts/load_test.py` / `docs/load-test-results.md` for queue and worker throughput).
 
 ## Roadmap
 
