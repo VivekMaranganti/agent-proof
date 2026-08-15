@@ -102,7 +102,8 @@ class TraceEventModel(Base):
     created_at: Mapped[datetime] = mapped_column(nullable=False)
 
     __table_args__ = (
-        Index("ix_trace_events_execution_id", "execution_id"),
+        Index("ix_trace_events_execution_id_event_type", "execution_id", "event_type"),
+        Index("ix_trace_events_payload_gin", "payload", postgresql_using="gin"),
         UniqueConstraint("execution_id", "sequence_no", name="uq_trace_events_execution_sequence"),
     )
 
