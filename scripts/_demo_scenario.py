@@ -153,13 +153,15 @@ async def _run_and_record(store: Store, run_id, version, task: BenchmarkTask, mo
 
 
 async def seed(store: Store) -> tuple[str, str]:
+    #tool_schema_hash differs between baseline/candidate so they get genuinely distinct
+    #content-hashed identities, not the same version twice
     baseline_version = await store.create_agent_version(
         AgentVersionCreate(
             name="support-agent",
             git_sha="baseline0000000",
             model="demo-model",
             system_prompt="You are a customer support agent.",
-            tool_schema_hash="demo-schema-hash",
+            tool_schema_hash="demo-schema-hash-baseline",
             config={},
         )
     )
@@ -169,7 +171,7 @@ async def seed(store: Store) -> tuple[str, str]:
             git_sha="candidate000000",
             model="demo-model",
             system_prompt="You are a customer support agent.",
-            tool_schema_hash="demo-schema-hash",
+            tool_schema_hash="demo-schema-hash-candidate",
             config={},
         )
     )

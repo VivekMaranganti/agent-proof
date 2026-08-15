@@ -102,7 +102,7 @@ Interactive docs (generated from the live schema) are at `/docs` once the app is
 | --- | --- | --- |
 | GET | `/api/v1/tasks` | List every seed task's contract (`expected_actions`, `forbidden_actions`, `expected_final_state`, etc.) |
 | GET | `/api/v1/tasks/{task_id}` | Fetch one task's contract |
-| POST | `/api/v1/agent-versions` | Register an agent version |
+| POST | `/api/v1/agent-versions` | Register an agent version. Idempotent on content: identical `model`/`system_prompt`/`tool_schema_hash`/`config` returns the existing version instead of creating a duplicate |
 | GET | `/api/v1/agent-versions/{id}` | Fetch an agent version |
 | POST | `/api/v1/evaluation-runs` | Start a run against an agent version |
 | POST | `/api/v1/evaluation-runs/{run_id}/executions` | Create a task execution within a run |
@@ -119,7 +119,7 @@ Interactive docs (generated from the live schema) are at `/docs` once the app is
 
 ## Evaluation principles
 
-- Agent versions and benchmark snapshots are immutable and reproducible.
+- Agent versions and benchmark snapshots are immutable and reproducible. AgentVersion identity is content-hashed (`backend/app/versioning.py`, over `model`/`system_prompt`/`tool_schema_hash`/`config` - not the `name` label or `git_sha` provenance): creating a version with content identical to an existing one returns that same version rather than minting a new identity, enforced by a real uniqueness constraint in Postgres, not just an app-level check. `benchmark.serialization.compute_content_hash` gives `SuiteSnapshot` the same guarantee.
 - Raw trace data is redacted before persistence (`backend/app/redaction.py`; key-name based - `name`, `email`, `phone`, `address`, etc., scrubbed at any nesting depth in a trace event's payload before it's written). Scoring and attribution run on the real, unredacted values in memory before that happens; only what's actually persisted (and anything read back from it later - comparisons, replay) is affected. That's a real tradeoff: if a redacted field is exactly where two runs differ, comparison can no longer see that difference after the fact.
 - Deterministic scoring is preferred for verifiable actions and state changes.
 - LLM judges use explicit rubrics; their individual labels, confidence, and disagreement are retained.

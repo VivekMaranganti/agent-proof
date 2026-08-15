@@ -18,13 +18,15 @@ from app.trace import ErrorPayload, FinalAnswerPayload, ToolCallPayload, ToolRes
 
 
 async def _version(store: PlatformStore, sha: str):
+    #tool_schema_hash varies with sha so distinct shas produce genuinely distinct
+    #content-hashed identities, not the same version twice
     return await store.create_agent_version(
         AgentVersionCreate(
             name=f"agent-{sha}",
             git_sha=sha,
             model="test-model",
             system_prompt="test",
-            tool_schema_hash="hash1234",
+            tool_schema_hash=sha,
         )
     )
 

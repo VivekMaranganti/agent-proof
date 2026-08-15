@@ -77,6 +77,7 @@ class AgentVersion(AgentVersionCreate):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID = Field(default_factory=uuid4)
+    content_hash: str
     created_at: datetime
 
 

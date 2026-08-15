@@ -63,13 +63,15 @@ def store() -> PostgresStore:
 
 
 async def _agent_version(store: PostgresStore, sha: str = "1111111"):
+    #tool_schema_hash varies with sha so distinct shas produce genuinely distinct
+    #content-hashed identities, not the same version twice
     return await store.create_agent_version(
         AgentVersionCreate(
             name=f"support-agent-{sha}",
             git_sha=sha,
             model="test-model",
             system_prompt="Follow the policy.",
-            tool_schema_hash="a1b2c3d4",
+            tool_schema_hash=sha,
         )
     )
 
@@ -90,6 +92,28 @@ async def test_create_and_fetch_agent_version(store: PostgresStore) -> None:
     version = await _agent_version(store)
     assert version.name == "support-agent-1111111"
     assert version.created_at is not None
+
+
+async def test_create_agent_version_is_idempotent_on_content(store: PostgresStore) -> None:
+    payload = AgentVersionCreate(
+        name="support-agent",
+        git_sha="abc1234",
+        model="test-model",
+        system_prompt="Follow the policy.",
+        tool_schema_hash="hash1234",
+    )
+
+    first = await store.create_agent_version(payload)
+    second = await store.create_agent_version(payload)
+
+    assert first.id == second.id
+    assert first.content_hash == second.content_hash
+
+    different = await store.create_agent_version(
+        payload.model_copy(update={"system_prompt": "A different prompt entirely."})
+    )
+    assert different.id != first.id
+    assert different.content_hash != first.content_hash
 
 
 async def test_create_run_requires_existing_agent_version(store: PostgresStore) -> None:
