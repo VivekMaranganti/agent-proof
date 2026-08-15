@@ -19,6 +19,7 @@ def _version(**overrides) -> AgentVersion:
         system_prompt="You are a support agent.",
         tool_schema_hash="hash1234",
         config={},
+        content_hash="contenthash1234",
         created_at=datetime.now(UTC),
     )
     defaults.update(overrides)

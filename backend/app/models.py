@@ -35,6 +35,7 @@ class AgentVersionModel(Base):
     system_prompt: Mapped[str] = mapped_column(nullable=False)
     tool_schema_hash: Mapped[str] = mapped_column(nullable=False)
     config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    content_hash: Mapped[str] = mapped_column(nullable=False, unique=True)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
 
 

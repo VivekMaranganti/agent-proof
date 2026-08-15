@@ -28,6 +28,7 @@ from app.schemas import (
     TraceEvent,
     TraceEventCreate,
 )
+from app.versioning import compute_agent_version_content_hash
 
 
 def utc_now() -> datetime:
@@ -67,7 +68,13 @@ class PlatformStore:
         self.verdicts_by_execution: dict[UUID, list[JudgeVerdict]] = defaultdict(list)
 
     async def create_agent_version(self, payload: AgentVersionCreate) -> AgentVersion:
-        version = AgentVersion(**payload.model_dump(), created_at=utc_now())
+        content_hash = compute_agent_version_content_hash(
+            payload.model, payload.system_prompt, payload.tool_schema_hash, payload.config
+        )
+        for existing in self.agent_versions.values():
+            if existing.content_hash == content_hash:
+                return existing
+        version = AgentVersion(**payload.model_dump(), content_hash=content_hash, created_at=utc_now())
         self.agent_versions[version.id] = version
         return version
 
