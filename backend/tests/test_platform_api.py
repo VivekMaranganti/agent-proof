@@ -5,6 +5,8 @@ from app.store import PlatformStore
 
 
 def _create_version(client: TestClient, sha: str) -> str:
+    #tool_schema_hash varies with sha (not just name/git_sha) so distinct shas produce
+    #genuinely distinct content-hashed identities, not the same version twice
     response = client.post(
         "/api/v1/agent-versions",
         json={
@@ -12,7 +14,7 @@ def _create_version(client: TestClient, sha: str) -> str:
             "git_sha": sha,
             "model": "test-model",
             "system_prompt": "Follow the policy.",
-            "tool_schema_hash": "a1b2c3d4",
+            "tool_schema_hash": sha,
         },
     )
     assert response.status_code == 201
@@ -213,3 +215,50 @@ def test_get_comparison_filters_by_task_disposition_and_divergence_type() -> Non
         f"/api/v1/comparisons/{baseline_run}/{candidate_run}", params={"divergence_type": "tool_error"}
     )
     assert no_match.json()["results"] == []
+
+
+def test_trace_event_payload_is_redacted_before_persistence() -> None:
+    client = TestClient(create_app(PlatformStore()))
+    run_id = _create_run(client, _create_version(client, "1010101"))
+    execution_id = _create_execution(client, run_id, "refund-011")
+
+    response = client.post(
+        f"/api/v1/executions/{execution_id}/trace-events",
+        json={
+            "sequence_no": 0,
+            "event_type": "tool_result",
+            "payload": {
+                "call_id": "c-1",
+                "result": {"customer_id": "CUST-001", "name": "Avery Chen", "email": "avery@example.test"},
+            },
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["payload"]["result"]["name"] == "[REDACTED]"
+    assert response.json()["payload"]["result"]["customer_id"] == "CUST-001"
+
+    trace = client.get(f"/api/v1/executions/{execution_id}/trace").json()
+    assert trace[0]["payload"]["result"]["email"] == "[REDACTED]"
+    assert trace[0]["payload"]["result"]["customer_id"] == "CUST-001"
+
+
+def test_creating_an_agent_version_twice_with_identical_content_is_idempotent() -> None:
+    client = TestClient(create_app(PlatformStore()))
+    body = {
+        "name": "support-agent",
+        "git_sha": "1212121",
+        "model": "test-model",
+        "system_prompt": "Follow the policy.",
+        "tool_schema_hash": "hash1212121",
+    }
+
+    first = client.post("/api/v1/agent-versions", json=body)
+    second = client.post("/api/v1/agent-versions", json=body)
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json()["id"] == second.json()["id"]
+    assert first.json()["content_hash"] == second.json()["content_hash"]
+
+    different = client.post("/api/v1/agent-versions", json={**body, "system_prompt": "A different prompt."})
+    assert different.json()["id"] != first.json()["id"]

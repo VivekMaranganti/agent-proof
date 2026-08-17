@@ -10,13 +10,22 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db import session_factory as default_session_factory
-from app.models import AgentVersionModel, EvaluationRunModel, TaskExecutionModel, TraceEventModel
+from app.models import (
+    AgentVersionModel,
+    EvaluationRunModel,
+    JudgeVerdictModel,
+    TaskExecutionModel,
+    TraceEventModel,
+)
+from app.redaction import redact_payload
 from app.schemas import (
     AgentVersion,
     AgentVersionCreate,
     EvaluationRun,
     EvaluationRunCreate,
     ExecutionStatus,
+    JudgeVerdict,
+    JudgeVerdictCreate,
     TaskExecution,
     TaskExecutionCreate,
     TaskExecutionResult,
@@ -24,6 +33,7 @@ from app.schemas import (
     TraceEventCreate,
 )
 from app.store import utc_now
+from app.versioning import compute_agent_version_content_hash
 
 
 class PostgresStore:
@@ -31,10 +41,28 @@ class PostgresStore:
         self._session_factory = session_factory or default_session_factory
 
     async def create_agent_version(self, payload: AgentVersionCreate) -> AgentVersion:
-        row = AgentVersionModel(**payload.model_dump(), created_at=utc_now())
+        content_hash = compute_agent_version_content_hash(
+            payload.model, payload.system_prompt, payload.tool_schema_hash, payload.config
+        )
         async with self._session_factory() as session:
+            existing = await session.execute(
+                select(AgentVersionModel).where(AgentVersionModel.content_hash == content_hash)
+            )
+            existing_row = existing.scalar_one_or_none()
+            if existing_row is not None:
+                return AgentVersion.model_validate(existing_row, from_attributes=True)
+
+            row = AgentVersionModel(**payload.model_dump(), content_hash=content_hash, created_at=utc_now())
             session.add(row)
-            await session.commit()
+            try:
+                await session.commit()
+            except IntegrityError:
+                # a concurrent request inserted the same content_hash between our check and this insert
+                await session.rollback()
+                result = await session.execute(
+                    select(AgentVersionModel).where(AgentVersionModel.content_hash == content_hash)
+                )
+                return AgentVersion.model_validate(result.scalar_one(), from_attributes=True)
             return AgentVersion.model_validate(row, from_attributes=True)
 
     async def get_agent_version(self, agent_version_id: UUID) -> AgentVersion:
@@ -82,7 +110,8 @@ class PostgresStore:
             execution = await session.get(TaskExecutionModel, execution_id)
             if execution is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="task execution not found")
-            row = TraceEventModel(**payload.model_dump(), execution_id=execution_id, created_at=utc_now())
+            redacted = payload.model_copy(update={"payload": redact_payload(payload.payload)})
+            row = TraceEventModel(**redacted.model_dump(), execution_id=execution_id, created_at=utc_now())
             session.add(row)
             try:
                 await session.commit()
@@ -119,3 +148,23 @@ class PostgresStore:
                 .order_by(TraceEventModel.sequence_no)
             )
             return [TraceEvent.model_validate(row, from_attributes=True) for row in result.scalars()]
+
+    async def append_judge_verdict(self, execution_id: UUID, payload: JudgeVerdictCreate) -> JudgeVerdict:
+        async with self._session_factory() as session:
+            execution = await session.get(TaskExecutionModel, execution_id)
+            if execution is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="task execution not found")
+            row = JudgeVerdictModel(**payload.model_dump(), execution_id=execution_id, created_at=utc_now())
+            session.add(row)
+            await session.commit()
+            return JudgeVerdict.model_validate(row, from_attributes=True)
+
+    async def get_judge_verdicts(self, execution_id: UUID) -> list[JudgeVerdict]:
+        async with self._session_factory() as session:
+            execution = await session.get(TaskExecutionModel, execution_id)
+            if execution is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="task execution not found")
+            result = await session.execute(
+                select(JudgeVerdictModel).where(JudgeVerdictModel.execution_id == execution_id)
+            )
+            return [JudgeVerdict.model_validate(row, from_attributes=True) for row in result.scalars()]

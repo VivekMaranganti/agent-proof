@@ -94,6 +94,16 @@ The frontend isn't containerized yet — run it separately with `npm run dev` in
 
 Tear down with `docker compose down` (add `-v` to also drop the seeded data).
 
+### Load testing
+
+```bash
+docker compose up -d postgres redis
+alembic upgrade head
+PYTHONPATH=".:backend" python scripts/load_test.py --jobs 100 --workers 4 --timeout 60
+```
+
+`scripts/load_test.py` seeds a batch of jobs against one seeded task, drains them with N concurrent workers, and reports wall-clock time, throughput, and p50/p95/p99 latency. Uses the deterministic `ReferenceAgentModelClient` oracle, not a live model, so it measures queue/worker overhead, not agent latency. See `docs/load-test-results.md` for baseline numbers from a real run and their limitations (single process, single machine - not a substitute for testing the actual multi-container deployment under real concurrent load).
+
 ## Platform API
 
 Interactive docs (generated from the live schema) are at `/docs` once the app is running. Summary of the surface:
@@ -102,7 +112,7 @@ Interactive docs (generated from the live schema) are at `/docs` once the app is
 | --- | --- | --- |
 | GET | `/api/v1/tasks` | List every seed task's contract (`expected_actions`, `forbidden_actions`, `expected_final_state`, etc.) |
 | GET | `/api/v1/tasks/{task_id}` | Fetch one task's contract |
-| POST | `/api/v1/agent-versions` | Register an agent version |
+| POST | `/api/v1/agent-versions` | Register an agent version. Idempotent on content: identical `model`/`system_prompt`/`tool_schema_hash`/`config` returns the existing version instead of creating a duplicate |
 | GET | `/api/v1/agent-versions/{id}` | Fetch an agent version |
 | POST | `/api/v1/evaluation-runs` | Start a run against an agent version |
 | POST | `/api/v1/evaluation-runs/{run_id}/executions` | Create a task execution within a run |
@@ -111,16 +121,22 @@ Interactive docs (generated from the live schema) are at `/docs` once the app is
 | GET | `/api/v1/executions/{id}/trace` | Read an execution's trace, ordered by `sequence_no`. Paginated: `limit` (default 200, max 1000) and `offset` query params; total count is in the `X-Total-Count` response header |
 | POST | `/api/v1/executions/{id}/result` | Record an execution's deterministic score |
 | GET | `/api/v1/executions/{id}` | Fetch an execution's recorded result, including contract-check detail (`missing_expected_actions`, `forbidden_actions_seen`, `final_state_mismatches`) |
+| POST | `/api/v1/executions/{id}/judge-verdicts` | Record one LLM judge's verdict (label, confidence, rationale) for an execution |
+| GET | `/api/v1/executions/{id}/judge-verdicts` | List an execution's judge verdicts |
 | GET | `/api/v1/comparisons/{baseline_run_id}/{candidate_run_id}` | Paired comparison: per-task disposition, latency/cost deltas, and first-divergence attribution for regressions. Filterable: `task_id`, `disposition`, `divergence_type` (only narrows `results`; `compared_tasks`/`regressions`/`improvements` always reflect the whole comparison) |
+
+`judges/orchestration.py`'s `run_judges` decides which judges apply to an execution; `runner/worker.py`'s `process_job` runs them and persists verdicts, but only when given a `judge_model_caller` - it's opt-in, not automatic, and nothing wires one up by default since there's still no live model backend (same gap as the agent's own `ModelClient`, see `runner/model_client.py`). Judge evaluation cadence (every execution, a sample, on-demand only) is a call for whoever wires a real caller in, not decided here.
+
+See `docs/data-model-invariants.md` for what each core entity (`AgentVersion`, `EvaluationRun`, `TaskExecution`, `TraceEvent`, `JudgeVerdict`) actually guarantees at the database level - identity, ordering, finalization, and what's deliberately left unenforced.
 
 ## Evaluation principles
 
-- Agent versions and benchmark snapshots are immutable and reproducible.
-- Raw trace data is redacted before persistence.
+- Agent versions and benchmark snapshots are immutable and reproducible. AgentVersion identity is content-hashed (`backend/app/versioning.py`, over `model`/`system_prompt`/`tool_schema_hash`/`config` - not the `name` label or `git_sha` provenance): creating a version with content identical to an existing one returns that same version rather than minting a new identity, enforced by a real uniqueness constraint in Postgres, not just an app-level check. `benchmark.serialization.compute_content_hash` gives `SuiteSnapshot` the same guarantee.
+- Raw trace data is redacted before persistence (`backend/app/redaction.py`; key-name based - `name`, `email`, `phone`, `address`, etc., scrubbed at any nesting depth in a trace event's payload before it's written). Scoring and attribution run on the real, unredacted values in memory before that happens; only what's actually persisted (and anything read back from it later - comparisons, replay) is affected. That's a real tradeoff: if a redacted field is exactly where two runs differ, comparison can no longer see that difference after the fact.
 - Deterministic scoring is preferred for verifiable actions and state changes.
 - LLM judges use explicit rubrics; their individual labels, confidence, and disagreement are retained.
 - Regression attribution is evidence-backed trace correlation, not a claim of causal proof.
-- Published performance and quality claims will come from reproducible scripts and benchmark reports.
+- Published performance and quality claims will come from reproducible scripts and benchmark reports (`scripts/load_test.py` / `docs/load-test-results.md` for queue and worker throughput).
 
 ## Roadmap
 

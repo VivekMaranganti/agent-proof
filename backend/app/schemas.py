@@ -58,6 +58,12 @@ class TraceDivergenceType(StrEnum):
     FINAL_ANSWER_MISMATCH = "final_answer_mismatch"
 
 
+class JudgeLabel(StrEnum):
+    PASS = "pass"
+    FAIL = "fail"
+    UNCERTAIN = "uncertain"
+
+
 class AgentVersionCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     git_sha: str = Field(min_length=7, max_length=64)
@@ -71,6 +77,7 @@ class AgentVersion(AgentVersionCreate):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID = Field(default_factory=uuid4)
+    content_hash: str
     created_at: datetime
 
 
@@ -150,6 +157,22 @@ class TraceEventCreate(BaseModel):
 class TraceEvent(TraceEventCreate):
     model_config = ConfigDict(from_attributes=True)
 
+    execution_id: UUID
+    created_at: datetime
+
+
+class JudgeVerdictCreate(BaseModel):
+    judge_name: str = Field(min_length=1, max_length=120)
+    rubric_version: str = Field(min_length=1, max_length=40)
+    label: JudgeLabel
+    confidence: float = Field(ge=0, le=1)
+    rationale: str = Field(min_length=1)
+
+
+class JudgeVerdict(JudgeVerdictCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID = Field(default_factory=uuid4)
     execution_id: UUID
     created_at: datetime
 

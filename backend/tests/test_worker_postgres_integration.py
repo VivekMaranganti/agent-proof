@@ -62,7 +62,7 @@ async def _clean_state():
     yield
     async with session_factory() as session:
         await session.execute(
-            text("TRUNCATE trace_events, task_executions, evaluation_runs, agent_versions RESTART IDENTITY CASCADE")
+            text("TRUNCATE judge_verdicts, trace_events, task_executions, evaluation_runs, agent_versions RESTART IDENTITY CASCADE")
         )
         await session.commit()
     redis = create_redis_client()

@@ -13,18 +13,22 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
+from app.redaction import redact_payload
 from app.schemas import (
     AgentVersion,
     AgentVersionCreate,
     EvaluationRun,
     EvaluationRunCreate,
     ExecutionStatus,
+    JudgeVerdict,
+    JudgeVerdictCreate,
     TaskExecution,
     TaskExecutionCreate,
     TaskExecutionResult,
     TraceEvent,
     TraceEventCreate,
 )
+from app.versioning import compute_agent_version_content_hash
 
 
 def utc_now() -> datetime:
@@ -50,6 +54,10 @@ class Store(Protocol):
 
     async def get_trace(self, execution_id: UUID) -> list[TraceEvent]: ...
 
+    async def append_judge_verdict(self, execution_id: UUID, payload: JudgeVerdictCreate) -> JudgeVerdict: ...
+
+    async def get_judge_verdicts(self, execution_id: UUID) -> list[JudgeVerdict]: ...
+
 
 class PlatformStore:
     def __init__(self) -> None:
@@ -57,9 +65,16 @@ class PlatformStore:
         self.runs: dict[UUID, EvaluationRun] = {}
         self.executions: dict[UUID, TaskExecution] = {}
         self.events_by_execution: dict[UUID, list[TraceEvent]] = defaultdict(list)
+        self.verdicts_by_execution: dict[UUID, list[JudgeVerdict]] = defaultdict(list)
 
     async def create_agent_version(self, payload: AgentVersionCreate) -> AgentVersion:
-        version = AgentVersion(**payload.model_dump(), created_at=utc_now())
+        content_hash = compute_agent_version_content_hash(
+            payload.model, payload.system_prompt, payload.tool_schema_hash, payload.config
+        )
+        for existing in self.agent_versions.values():
+            if existing.content_hash == content_hash:
+                return existing
+        version = AgentVersion(**payload.model_dump(), content_hash=content_hash, created_at=utc_now())
         self.agent_versions[version.id] = version
         return version
 
@@ -96,7 +111,8 @@ class PlatformStore:
         events = self.events_by_execution[execution_id]
         if any(event.sequence_no == payload.sequence_no for event in events):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="duplicate trace sequence number")
-        event = TraceEvent(**payload.model_dump(), execution_id=execution_id, created_at=utc_now())
+        redacted = payload.model_copy(update={"payload": redact_payload(payload.payload)})
+        event = TraceEvent(**redacted.model_dump(), execution_id=execution_id, created_at=utc_now())
         events.append(event)
         events.sort(key=lambda item: item.sequence_no)
         return event
@@ -115,3 +131,13 @@ class PlatformStore:
     async def get_trace(self, execution_id: UUID) -> list[TraceEvent]:
         await self.get_execution(execution_id)
         return list(self.events_by_execution[execution_id])
+
+    async def append_judge_verdict(self, execution_id: UUID, payload: JudgeVerdictCreate) -> JudgeVerdict:
+        await self.get_execution(execution_id)
+        verdict = JudgeVerdict(**payload.model_dump(), execution_id=execution_id, created_at=utc_now())
+        self.verdicts_by_execution[execution_id].append(verdict)
+        return verdict
+
+    async def get_judge_verdicts(self, execution_id: UUID) -> list[JudgeVerdict]:
+        await self.get_execution(execution_id)
+        return list(self.verdicts_by_execution[execution_id])

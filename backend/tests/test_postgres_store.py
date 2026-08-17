@@ -18,6 +18,7 @@ from app.schemas import (
     AgentVersionCreate,
     EvaluationRunCreate,
     EventType,
+    JudgeVerdictCreate,
     TaskExecutionCreate,
     TaskExecutionResult,
     TraceEventCreate,
@@ -51,7 +52,7 @@ async def _clean_tables():
     yield
     async with session_factory() as session:
         await session.execute(
-            text("TRUNCATE trace_events, task_executions, evaluation_runs, agent_versions RESTART IDENTITY CASCADE")
+            text("TRUNCATE judge_verdicts, trace_events, task_executions, evaluation_runs, agent_versions RESTART IDENTITY CASCADE")
         )
         await session.commit()
 
@@ -62,13 +63,15 @@ def store() -> PostgresStore:
 
 
 async def _agent_version(store: PostgresStore, sha: str = "1111111"):
+    #tool_schema_hash varies with sha so distinct shas produce genuinely distinct
+    #content-hashed identities, not the same version twice
     return await store.create_agent_version(
         AgentVersionCreate(
             name=f"support-agent-{sha}",
             git_sha=sha,
             model="test-model",
             system_prompt="Follow the policy.",
-            tool_schema_hash="a1b2c3d4",
+            tool_schema_hash=sha,
         )
     )
 
@@ -89,6 +92,28 @@ async def test_create_and_fetch_agent_version(store: PostgresStore) -> None:
     version = await _agent_version(store)
     assert version.name == "support-agent-1111111"
     assert version.created_at is not None
+
+
+async def test_create_agent_version_is_idempotent_on_content(store: PostgresStore) -> None:
+    payload = AgentVersionCreate(
+        name="support-agent",
+        git_sha="abc1234",
+        model="test-model",
+        system_prompt="Follow the policy.",
+        tool_schema_hash="hash1234",
+    )
+
+    first = await store.create_agent_version(payload)
+    second = await store.create_agent_version(payload)
+
+    assert first.id == second.id
+    assert first.content_hash == second.content_hash
+
+    different = await store.create_agent_version(
+        payload.model_copy(update={"system_prompt": "A different prompt entirely."})
+    )
+    assert different.id != first.id
+    assert different.content_hash != first.content_hash
 
 
 async def test_create_run_requires_existing_agent_version(store: PostgresStore) -> None:
@@ -149,6 +174,62 @@ async def test_record_result_persists_contract_score_detail(store: PostgresStore
     assert fetched.missing_expected_actions == ("refund.create_refund",)
     assert fetched.forbidden_actions_seen == ()
     assert fetched.final_state_mismatches == ("refunds.ORD-1001: missing from final state",)
+
+
+async def test_append_trace_event_redacts_sensitive_fields(store: PostgresStore) -> None:
+    version = await _agent_version(store)
+    run = await _run(store, version.id)
+    execution = await store.create_execution(run.id, TaskExecutionCreate(task_id="refund-001", task_seed=7))
+
+    recorded = await store.append_trace_event(
+        execution.id,
+        TraceEventCreate(
+            sequence_no=0,
+            event_type=EventType.TOOL_RESULT,
+            payload={
+                "call_id": "c-1",
+                "result": {"customer_id": "CUST-001", "name": "Avery Chen", "email": "avery@example.test"},
+            },
+        ),
+    )
+    fetched = (await store.get_trace(execution.id))[0]
+
+    for event in (recorded, fetched):
+        assert event.payload["result"]["customer_id"] == "CUST-001"
+        assert event.payload["result"]["name"] == "[REDACTED]"
+        assert event.payload["result"]["email"] == "[REDACTED]"
+
+
+async def test_append_and_get_judge_verdicts(store: PostgresStore) -> None:
+    version = await _agent_version(store)
+    run = await _run(store, version.id)
+    execution = await store.create_execution(run.id, TaskExecutionCreate(task_id="refund-001", task_seed=7))
+
+    await store.append_judge_verdict(
+        execution.id,
+        JudgeVerdictCreate(
+            judge_name="policy_judge",
+            rubric_version="v1",
+            label="pass",
+            confidence=0.9,
+            rationale="Identity was checked before acting.",
+        ),
+    )
+    await store.append_judge_verdict(
+        execution.id,
+        JudgeVerdictCreate(
+            judge_name="response_quality_judge",
+            rubric_version="v1",
+            label="uncertain",
+            confidence=0.4,
+            rationale="Reply was terse but not wrong.",
+        ),
+    )
+
+    verdicts = await store.get_judge_verdicts(execution.id)
+
+    assert {verdict.judge_name for verdict in verdicts} == {"policy_judge", "response_quality_judge"}
+    assert all(verdict.execution_id == execution.id for verdict in verdicts)
 
 
 async def test_append_trace_event_rejects_duplicate_sequence(store: PostgresStore) -> None:
