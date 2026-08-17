@@ -35,12 +35,24 @@ function DeltaCell({ value, unit, lowerIsBetter }: { value: number | null; unit:
   );
 }
 
-function PassBadge({ passed }: { passed: boolean | null }) {
-  if (passed === null) return <span className="pass-badge pass-unknown">—</span>;
+function PassBadge({
+  passed,
+  executionId,
+  onViewTaskDetail,
+}: {
+  passed: boolean | null;
+  executionId: string;
+  onViewTaskDetail: (executionId: string) => void;
+}) {
   return (
-    <span className={passed ? "pass-badge pass-yes" : "pass-badge pass-no"}>
-      {passed ? "Pass" : "Fail"}
-    </span>
+    <button
+      type="button"
+      className={`pass-badge-button pass-badge ${passed === null ? "pass-unknown" : passed ? "pass-yes" : "pass-no"}`}
+      onClick={() => onViewTaskDetail(executionId)}
+      title="View task detail"
+    >
+      {passed === null ? "—" : passed ? "Pass" : "Fail"}
+    </button>
   );
 }
 
@@ -76,9 +88,10 @@ function AttributionNote({
 
 export interface ComparisonPageProps {
   onViewTrace: (executionId: string, highlightEventId: string | null) => void;
+  onViewTaskDetail: (executionId: string) => void;
 }
 
-export default function ComparisonPage({ onViewTrace }: ComparisonPageProps) {
+export default function ComparisonPage({ onViewTrace, onViewTaskDetail }: ComparisonPageProps) {
   const [baselineRunId, setBaselineRunId] = useState("");
   const [candidateRunId, setCandidateRunId] = useState("");
   const [comparison, setComparison] = useState<RunComparison | null>(null);
@@ -180,10 +193,18 @@ export default function ComparisonPage({ onViewTrace }: ComparisonPageProps) {
                     </span>
                   </td>
                   <td>
-                    <PassBadge passed={result.baseline_passed} />
+                    <PassBadge
+                      passed={result.baseline_passed}
+                      executionId={result.baseline_execution_id}
+                      onViewTaskDetail={onViewTaskDetail}
+                    />
                   </td>
                   <td>
-                    <PassBadge passed={result.candidate_passed} />
+                    <PassBadge
+                      passed={result.candidate_passed}
+                      executionId={result.candidate_execution_id}
+                      onViewTaskDetail={onViewTaskDetail}
+                    />
                   </td>
                   <td>
                     <DeltaCell value={result.latency_delta_ms} unit="ms" lowerIsBetter />
