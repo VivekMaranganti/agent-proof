@@ -1,4 +1,4 @@
-import type { RunComparison, TaskContract, TaskExecution, TraceEvent } from "./types";
+import type { JudgeVerdict, RunComparison, TaskContract, TaskExecution, TraceEvent } from "./types";
 
 const DEFAULT_API_BASE_URL = "http://localhost:8000";
 
@@ -57,4 +57,14 @@ export async function fetchTaskContract(taskId: string): Promise<TaskContract> {
     throw new ApiError(response.status, detail || response.statusText);
   }
   return (await response.json()) as TaskContract;
+}
+
+export async function fetchJudgeVerdicts(executionId: string): Promise<JudgeVerdict[]> {
+  const url = `${apiBaseUrl()}/api/v1/executions/${encodeURIComponent(executionId)}/judge-verdicts`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new ApiError(response.status, detail || response.statusText);
+  }
+  return (await response.json()) as JudgeVerdict[];
 }

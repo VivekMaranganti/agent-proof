@@ -112,3 +112,16 @@ export interface TaskContract {
   tags: string[];
   difficulty: string;
 }
+
+export type JudgeLabel = "pass" | "fail" | "uncertain";
+
+export interface JudgeVerdict {
+  id: string;
+  execution_id: string;
+  judge_name: string;
+  rubric_version: string;
+  label: JudgeLabel;
+  confidence: number;
+  rationale: string;
+  created_at: string;
+}
