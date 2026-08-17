@@ -44,9 +44,14 @@ function MismatchList({ title, items, emptyLabel }: { title: string; items: stri
 export interface TaskDetailPageProps {
   initialExecutionId?: string;
   onViewTrace: (executionId: string, highlightEventId: string | null) => void;
+  onViewJudgeResults: (executionId: string) => void;
 }
 
-export default function TaskDetailPage({ initialExecutionId, onViewTrace }: TaskDetailPageProps) {
+export default function TaskDetailPage({
+  initialExecutionId,
+  onViewTrace,
+  onViewJudgeResults,
+}: TaskDetailPageProps) {
   const [executionId, setExecutionId] = useState(initialExecutionId ?? "");
   const [execution, setExecution] = useState<TaskExecution | null>(null);
   const [contract, setContract] = useState<TaskContract | null>(null);
@@ -114,6 +119,9 @@ export default function TaskDetailPage({ initialExecutionId, onViewTrace }: Task
             <code className="task-id">{execution.task_id}</code>
             <button type="button" onClick={() => onViewTrace(execution.id, null)}>
               View trace
+            </button>
+            <button type="button" onClick={() => onViewJudgeResults(execution.id)}>
+              View judge results
             </button>
           </div>
 

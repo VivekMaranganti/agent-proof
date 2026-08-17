@@ -10,7 +10,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 from app.execution_scoring import score_execution
-from app.schemas import AgentVersionCreate, EvaluationRunCreate, TaskExecutionCreate
+from app.schemas import AgentVersionCreate, EvaluationRunCreate, JudgeVerdictCreate, TaskExecutionCreate
 from app.store import Store
 from benchmark.schema import BenchmarkTask
 from benchmark.tasks import (
@@ -142,7 +142,37 @@ def _regressed_model_for_refund_within_policy() -> ScriptedModelClient:
     )
 
 
-async def _run_and_record(store: Store, run_id, version, task: BenchmarkTask, model: ScriptedModelClient) -> None:
+# A real disagreement case: no live model backend exists yet to run judges for
+# real (see runner/worker.py's judge_model_caller), so this is hand-seeded onto
+# the regressed candidate execution to give the judge-results view something
+# genuine to show — two judges assessing different things, correctly reaching
+# different verdicts about the same run.
+REGRESSED_REFUND_JUDGE_VERDICTS: tuple[JudgeVerdictCreate, ...] = (
+    JudgeVerdictCreate(
+        judge_name="policy_judge",
+        rubric_version="1",
+        label="fail",
+        confidence=0.9,
+        rationale="The agent never checked refund eligibility or issued the refund the customer was owed.",
+    ),
+    JudgeVerdictCreate(
+        judge_name="response_quality_judge",
+        rubric_version="1",
+        label="pass",
+        confidence=0.6,
+        rationale="The reply itself is polite and clearly worded, even though it doesn't reflect the missing refund.",
+    ),
+)
+
+
+async def _run_and_record(
+    store: Store,
+    run_id,
+    version,
+    task: BenchmarkTask,
+    model: ScriptedModelClient,
+    judge_verdicts: tuple[JudgeVerdictCreate, ...] = (),
+) -> None:
     result = await run_task(version, task, model, execution_id=uuid4())
     execution_result, _ = score_execution(task, result)
 
@@ -150,6 +180,8 @@ async def _run_and_record(store: Store, run_id, version, task: BenchmarkTask, mo
     for event in result.trace.to_storage():
         await store.append_trace_event(execution.id, event)
     await store.record_result(execution.id, execution_result)
+    for verdict in judge_verdicts:
+        await store.append_judge_verdict(execution.id, verdict)
 
 
 async def seed(store: Store) -> tuple[str, str]:
@@ -197,11 +229,17 @@ async def seed(store: Store) -> tuple[str, str]:
 
     for task in TASKS:
         await _run_and_record(store, baseline_run.id, baseline_version, task, _correct_model_for(task))
+        is_regressed_task = task is CUSTOMER_REFUND_WITHIN_POLICY
         candidate_model = (
-            _regressed_model_for_refund_within_policy()
-            if task is CUSTOMER_REFUND_WITHIN_POLICY
-            else _correct_model_for(task)
+            _regressed_model_for_refund_within_policy() if is_regressed_task else _correct_model_for(task)
         )
-        await _run_and_record(store, candidate_run.id, candidate_version, task, candidate_model)
+        await _run_and_record(
+            store,
+            candidate_run.id,
+            candidate_version,
+            task,
+            candidate_model,
+            judge_verdicts=REGRESSED_REFUND_JUDGE_VERDICTS if is_regressed_task else (),
+        )
 
     return str(baseline_run.id), str(candidate_run.id)

@@ -28,7 +28,8 @@
 
 .comparison-page,
 .trace-replay-page,
-.task-detail-page {
+.task-detail-page,
+.judge-results-page {
   width: 100%;
   max-width: 960px;
   margin: 0 auto;
@@ -512,4 +513,74 @@
   margin: 4px 0 0;
   font-size: 12px;
   color: var(--text);
+}
+
+.disagreement-banner {
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: rgba(217, 119, 6, 0.12);
+  color: #d97706;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.verdict-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.verdict-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.verdict-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.verdict-judge-name {
+  font-weight: 500;
+  color: var(--text-h);
+}
+
+.judge-label-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.judge-label-pass {
+  background: rgba(22, 163, 74, 0.15);
+  color: #16a34a;
+}
+
+.judge-label-fail {
+  background: rgba(217, 45, 32, 0.15);
+  color: #d92d20;
+}
+
+.judge-label-uncertain {
+  background: rgba(217, 119, 6, 0.15);
+  color: #d97706;
+}
+
+.verdict-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.verdict-rationale {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
 }
